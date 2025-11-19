@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 
 export default function Home() {
-  const [pricingPeriod, setPricingPeriod] = useState<'monthly' | 'annual'>('annual');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [darkMode, setDarkMode] = useState(false);
 
@@ -47,21 +45,6 @@ export default function Home() {
       title: "Application Tracking",
       description: "Transparency on application status at all times",
       features: ["Real-time updates", "Status tracking", "Notification system"]
-    },
-    {
-      title: "Smart Job Matching",
-      description: "Find opportunities that match your skills and preferences",
-      features: ["Advanced filtering", "Location based search", "Keyword matching"]
-    },
-    {
-      title: "ATS Integration",
-      description: "Company-side system for managing applications",
-      features: ["Applicant filtering", "Status management", "Communication tools"]
-    },
-    {
-      title: "Secure Communication",
-      description: "Safe and reliable messaging between students and companies",
-      features: ["Encrypted messaging", "Email notifications", "In-app alerts"]
     }
   ];
 
@@ -117,7 +100,7 @@ export default function Home() {
             </nav>
             <div className="flex items-center space-x-4">
               {/* Dark Mode Toggle */}
-              <button
+              <button 
                 onClick={toggleDarkMode}
                 className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
                 aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
@@ -237,7 +220,7 @@ export default function Home() {
               Langkah-langkah sederhana untuk menghubungkan mahasiswa dan perusahaan untuk magang yang bermakna.
             </p>
           </div>
-
+          
           <div className="mb-20">
             <h3 className={`text-[2.25rem] font-bold mb-10 text-center ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>Untuk Mahasiswa</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
