@@ -1,5 +1,5 @@
 // HeaderSection.tsx
-import { ToggleDarkModeProps } from '../interfaces';
+import { HeaderSectionProps, ToggleDarkModeProps } from '../interfaces';
 import { useState } from 'react';
 
 const scrollToSection = (id: string) => {

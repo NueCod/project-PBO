@@ -22,6 +22,7 @@ type FormData = {
 
 const CreateInternshipPage = () => {
   const router = useRouter();
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     title: '',
@@ -533,7 +534,7 @@ const CreateInternshipPage = () => {
                 <div className="flex justify-end space-x-4">
                   <button
                     type="button"
-                    onClick={() => router.push('/dashboard')}
+                    onClick={() => setShowConfirmDialog(true)}
                     className={`px-6 py-3 rounded-lg font-medium ${
                       darkMode
                         ? 'bg-gray-700 text-white hover:bg-gray-600'
@@ -554,6 +555,40 @@ const CreateInternshipPage = () => {
           </div>
         </main>
       </div>
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl p-6 shadow-lg w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <h3 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              Konfirmasi Pembatalan
+            </h3>
+            <p className={`mb-6 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              Apakah Anda yakin ingin membatalkan? Data formulir yang belum disimpan akan hilang.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirmDialog(false)}
+                className={`px-4 py-2 rounded-lg font-medium ${
+                  darkMode
+                    ? 'bg-gray-700 text-white hover:bg-gray-600'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="bg-red-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-600 transition-colors"
+              >
+                Ya, Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
