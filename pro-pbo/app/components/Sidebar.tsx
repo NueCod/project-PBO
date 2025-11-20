@@ -1,21 +1,33 @@
 import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 type MenuItem = {
   id: string;
   label: string;
   icon: string;
+  href: string;
 };
 
 const Sidebar = ({ darkMode }: { darkMode: boolean }) => {
-  const [activeItem, setActiveItem] = useState('dashboard');
-  
-  const menuItems: MenuItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'internships', label: 'Magang', icon: '💼' },
-    { id: 'students', label: 'Mahasiswa', icon: '👥' },
-    { id: 'applications', label: 'Lamaran', icon: '📋' },
-    { id: 'company', label: 'Perusahaan', icon: '🏢' },
-    { id: 'settings', label: 'Pengaturan', icon: '⚙️' },
+  const pathname = usePathname();
+
+  // Determine which menu items to show based on the current path
+  const isStudentDashboard = pathname?.startsWith('/dashboard-student');
+
+  const menuItems = isStudentDashboard ? [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', href: '/dashboard-student' },
+    { id: 'find-internships', label: 'Cari Magang', icon: '🔍', href: '/dashboard-student/find-internships' },
+    { id: 'my-applications', label: 'Lamaran Saya', icon: '📋', href: '/dashboard-student/my-applications' },
+    { id: 'profile', label: 'Profil Saya', icon: '👤', href: '/dashboard-student/profile' },
+    { id: 'documents', label: 'Dokumen', icon: '📄', href: '/dashboard-student/documents' },
+  ] : [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', href: '/dashboard' },
+    { id: 'create-internship', label: 'Buat Magang', icon: '💼', href: '/dashboard/create-internship' },
+    { id: 'students', label: 'Mahasiswa', icon: '👥', href: '/dashboard/students' },
+    { id: 'applications', label: 'Lamaran', icon: '📋', href: '/dashboard/applications' },
+    { id: 'manage-company', label: 'Profil Perusahaan', icon: '🏢', href: '/dashboard/manage-company-profile' },
+    { id: 'settings', label: 'Pengaturan', icon: '⚙️', href: '/dashboard/settings' },
   ];
 
   return (
@@ -25,25 +37,29 @@ const Sidebar = ({ darkMode }: { darkMode: boolean }) => {
 
         <nav>
           <ul className="space-y-2">
-            {menuItems.map((item) => (
-              <li key={item.id}>
-                <button
-                  onClick={() => setActiveItem(item.id)}
-                  className={`w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3 transition-colors ${
-                    activeItem === item.id
-                      ? darkMode 
-                        ? 'bg-[#f59e0b] text-white' 
-                        : 'bg-[#f59e0b] text-white'
-                      : darkMode
-                        ? 'text-gray-300 hover:bg-gray-700'
-                        : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <span className="text-lg">{item.icon}</span>
-                  <span>{item.label}</span>
-                </button>
-              </li>
-            ))}
+            {menuItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <li key={item.id}>
+                  <Link href={item.href}>
+                    <div
+                      className={`w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3 transition-colors cursor-pointer ${
+                        isActive
+                          ? darkMode
+                            ? 'bg-[#f59e0b] text-white'
+                            : 'bg-[#f59e0b] text-white'
+                          : darkMode
+                            ? 'text-gray-300 hover:bg-gray-700'
+                            : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <span className="text-lg">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       </div>

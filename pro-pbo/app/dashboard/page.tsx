@@ -163,53 +163,117 @@ const DashboardPage = () => {
               ))}
             </div>
 
-            {/* Charts and Activity Section */}
+            {/* Charts and Applications Overview Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Recent Activity */}
+              {/* Application Status Overview */}
               <div className={`lg:col-span-2 rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Aktivitas Terbaru</h2>
-                <div className="space-y-4">
-                  {recentActivities.map(activity => (
-                    <div key={activity.id} className="flex items-start pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0">
-                      <div className={`mr-3 mt-1 h-10 w-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center`}>
-                        <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>{activity.user.charAt(0)}</span>
-                      </div>
+                <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ikhtisar Lamaran</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Diterima</p>
+                    <p className="text-2xl font-bold text-green-500">18</p>
+                  </div>
+                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Dalam Proses</p>
+                    <p className="text-2xl font-bold text-yellow-500">12</p>
+                  </div>
+                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Ditolak</p>
+                    <p className="text-2xl font-bold text-red-500">8</p>
+                  </div>
+                </div>
+
+                {/* Progress and Conversion Rate */}
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tingkat Konversi Lamaran</span>
+                    <span className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>65%</span>
+                  </div>
+                  <div className={`w-full h-3 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                    <div className="bg-green-500 h-3 rounded-full" style={{ width: '65%' }}></div>
+                  </div>
+                </div>
+
+                {/* Recent Applications */}
+                <div>
+                  <h3 className={`font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Lamaran Terbaru</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
                       <div>
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          <span className="font-semibold">{activity.user}</span> {activity.action}
-                        </p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{activity.time}</p>
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Budi Santoso</p>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>UI/UX Designer</p>
                       </div>
+                      <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">Disetujui</span>
                     </div>
-                  ))}
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                      <div>
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Siti Nurhaliza</p>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Backend Developer</p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">Dalam Proses</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                      <div>
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ahmad Fauzi</p>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Data Analyst</p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-xs bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">Ditolak</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                      <div>
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Rina Kartika</p>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Marketing Intern</p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">Disetujui</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Quick Actions */}
+              {/* Upcoming Deadlines and Top Internships */}
               <div className={`rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tindakan Cepat</h2>
-                <div className="space-y-3">
-                  <a href="/dashboard/create-internship" className={`block w-full text-left px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-colors`}>
-                    Buat Program Magang Baru
-                  </a>
-                  <button className={`w-full text-left px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-colors`}>
-                    Review Lamaran
-                  </button>
-                  <button className={`w-full text-left px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-colors`}>
-                    Kelola Profil Perusahaan
-                  </button>
-                  <button className={`w-full text-left px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-colors`}>
-                    Lihat Laporan
-                  </button>
-                </div>
-                
-                {/* Upcoming Deadline */}
-                <div className={`mt-8 pt-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                  <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Batas Waktu Mendatang</h2>
+                <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tugas Mendatang</h2>
+
+                <div className="mb-6">
+                  <h3 className={`font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Batas Waktu Mendatang</h3>
                   <div className={`p-4 rounded-lg ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${darkMode ? 'border-red-800' : 'border-red-200'}`}>
                     <p className={`font-medium ${darkMode ? 'text-red-300' : 'text-red-700'}`}>Program Magang Pemasaran</p>
                     <p className={`text-sm mt-1 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>Batas waktu: 5 hari lagi</p>
                     <p className={`text-xs mt-2 ${darkMode ? 'text-red-500' : 'text-red-500'}`}>12 lamaran menunggu review</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className={`font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Program Terpopuler</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>UI/UX Designer</p>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>124 lamaran</p>
+                      </div>
+                      <button className={`px-3 py-1 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                        Lihat
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Backend Developer</p>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>98 lamaran</p>
+                      </div>
+                      <button className={`px-3 py-1 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                        Lihat
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Data Analyst</p>
+                        <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>87 lamaran</p>
+                      </div>
+                      <button className={`px-3 py-1 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                        Lihat
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
