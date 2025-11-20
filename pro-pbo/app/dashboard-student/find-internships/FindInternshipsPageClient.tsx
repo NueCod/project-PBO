@@ -463,12 +463,14 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                       </div>
                       
                       <div className="ml-4 flex flex-col items-center">
-                        <button 
-                          className={`px-4 py-2 rounded-lg mb-2 ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
-                          disabled={internship.status === 'Closed'}
-                        >
-                          Lamar
-                        </button>
+                        <a href={`/dashboard-student/find-internships/${internship.id}`}>
+                          <button
+                            className={`px-4 py-2 rounded-lg mb-2 ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
+                            disabled={internship.status === 'Closed'}
+                          >
+                            Lamar
+                          </button>
+                        </a>
                         <button className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} transition-colors`}>
                           Detail
                         </button>

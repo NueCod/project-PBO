@@ -349,19 +349,19 @@ const DocumentsPage = () => {
 
       {/* Upload Document Modal */}
       {uploadModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-md bg-black/20 dark:bg-black/40 flex items-center justify-center z-50 p-4">
           <div className={`rounded-xl shadow-lg w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Unggah Dokumen Baru</h2>
-                <button 
+                <button
                   onClick={() => setUploadModalOpen(false)}
                   className={`text-2xl ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
                 >
                   &times;
                 </button>
               </div>
-              
+
               <div className="mb-4">
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Jenis Dokumen</label>
                 <select
@@ -377,19 +377,19 @@ const DocumentsPage = () => {
                   <option value="Other">Lainnya</option>
                 </select>
               </div>
-              
+
               <div className="mb-4">
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Pilih File</label>
                 <div className={`border-2 border-dashed rounded-lg p-6 text-center ${darkMode ? 'border-gray-600' : 'border-gray-300'}`}>
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     onChange={handleFileChange}
-                    className="hidden" 
+                    className="hidden"
                     id="file-upload"
                     accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
                   />
-                  <label 
-                    htmlFor="file-upload" 
+                  <label
+                    htmlFor="file-upload"
                     className={`cursor-pointer inline-flex flex-col items-center ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`}
                   >
                     <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,7 +405,7 @@ const DocumentsPage = () => {
                   )}
                 </div>
               </div>
-              
+
               <div className="mb-6">
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Deskripsi (Opsional)</label>
                 <textarea
@@ -416,7 +416,7 @@ const DocumentsPage = () => {
                   className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 ></textarea>
               </div>
-              
+
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => setUploadModalOpen(false)}
