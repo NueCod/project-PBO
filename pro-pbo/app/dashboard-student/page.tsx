@@ -2,26 +2,43 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/authContext';
-import { getStudentProfile } from '../lib/apiService';
+import { useRouter } from 'next/navigation';
 import Sidebar from '../components/Sidebar';
 
-type StatCard = {
-  title: string;
-  value: string;
-  change: string;
-  icon: string;
-};
-
-type Application = {
-  id: number;
-  position: string;
-  company: string;
-  status: 'Submitted' | 'Reviewed' | 'Accepted' | 'Rejected';
-  date: string;
-};
-
 const StudentDashboardPage = () => {
+  const { user, token } = useAuth(); // Get both user and token from auth context
+  const router = useRouter();
   const [darkMode, setDarkMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [studentProfile, setStudentProfile] = useState<any>(null);
+
+  // Fetch student profile
+  useEffect(() => {
+    const fetchStudentProfile = async () => {
+      if (token) {
+        try {
+          const { getStudentProfile } = await import('../lib/apiService');
+          const profile = await getStudentProfile(token);
+          setStudentProfile(profile);
+        } catch (error) {
+          console.error('Error fetching student profile:', error);
+        }
+      }
+    };
+
+    fetchStudentProfile();
+  }, [token]);
+
+  // Redirect based on user role
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'company') {
+        router.push('/dashboard');
+      } else if (user.role === 'admin') {
+        router.push('/dashboard-admin');
+      }
+    }
+  }, [user, router]);
 
   useEffect(() => {
     // Check system preference for dark mode
@@ -42,19 +59,6 @@ const StudentDashboardPage = () => {
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
   };
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  const stats: StatCard[] = [
-    { title: 'Total Aplikasi', value: '8', change: '+2 bulan ini', icon: '📋' },
-    { title: 'Dalam Proses', value: '3', change: '-1 bulan ini', icon: '⏳' },
-  ];
-
-  const applications: Application[] = [
-    { id: 1, position: 'UI/UX Designer', company: 'PT Teknologi Maju', status: 'Accepted', date: '15 Okt 2024' },
-    { id: 2, position: 'Backend Developer', company: 'PT Digital Solusi', status: 'Reviewed', date: '18 Okt 2024' },
-    { id: 3, position: 'Data Analyst', company: 'PT Analitika Cerdas', status: 'Submitted', date: '20 Okt 2024' },
-    { id: 4, position: 'Marketing Intern', company: 'PT Kreatif Indonesia', status: 'Rejected', date: '22 Okt 2024' },
-  ];
 
   // Toggle sidebar on mobile
   useEffect(() => {
@@ -72,65 +76,38 @@ const StudentDashboardPage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Function to get status color
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'Submitted': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
-      case 'Reviewed': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
-      case 'Accepted': return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
-      case 'Rejected': return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
-  };
+  // If user is not loaded yet or not a student, show loading or redirect
+  if (!user || user.role !== 'student') {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <p>Memuat dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
-  // Function to handle quick apply button click
-  const handleQuickApplyClick = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    const { token } = useAuth();
-    if (token) {
-      try {
-        const profile = await getStudentProfile(token);
+  // Enhanced stats data - keeping only the essential ones
+  const stats = [
+    { title: 'Lamaran Aktif', value: '3', change: '+1 minggu ini', icon: '📋', color: 'blue' },
+    { title: 'Total Lamaran', value: '12', change: '+2 minggu ini', icon: '📊', color: 'green' },
+    { title: 'Wawancara Dijadwalkan', value: '2', change: '+0 minggu ini', icon: '📅', color: 'purple' },
+  ];
 
-        // Build query parameters from profile data
-        const queryParams = new URLSearchParams({
-          prefiltered: 'true',
-          major: profile.major,
-          location: profile.location,
-          university: profile.university,
-          skills: profile.skills.join(','),
-          interests: profile.interests.join(',')
-        });
+  // Professional activity data
+  const recentActivities = [
+    { id: 1, activity: 'Melamar magang di PT Maju Jaya', time: '2 jam yang lalu', type: 'application' },
+    { id: 2, activity: 'Status lamaran diperbarui', time: '1 hari yang lalu', type: 'update' },
+    { id: 3, activity: 'Menerima pesan dari perusahaan', time: '2 hari yang lalu', type: 'message' },
+    { id: 4, activity: 'Menyelesaikan profil pribadi', time: '3 hari yang lalu', type: 'completion' },
+  ];
 
-        // Navigate to find-internships page with pre-filled filters
-        window.location.href = `/dashboard-student/find-internships?${queryParams.toString()}`;
-      } catch (error) {
-        console.error('Error fetching profile for quick apply:', error);
-      }
-    }
-  };
-
-  const [userName, setUserName] = useState<string>('User');
-  const [userEmail, setUserEmail] = useState<string>('user@example.com');
-  const [userInitial, setUserInitial] = useState<string>('U');
-
-  const { token } = useAuth();
-
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (token) {
-        try {
-          const profile = await getStudentProfile(token);
-          setUserName(profile.name || profile.email.split('@')[0]); // Gunakan nama dari profil, atau username dari email jika tidak ada
-          setUserEmail(profile.email);
-          setUserInitial(profile.name?.charAt(0).toUpperCase() || profile.email.charAt(0).toUpperCase());
-        } catch (error) {
-          console.error('Error fetching user profile:', error);
-        }
-      }
-    };
-
-    fetchUserProfile();
-  }, [token]);
+  // Upcoming deadlines
+  const deadlines = [
+    { id: 1, title: 'UI/UX Designer di PT Digital Solution', company: 'PT Digital Solution', deadline: '2025-02-15', daysLeft: 16 },
+    { id: 2, title: 'Data Analyst di PT Riset Cerdas', company: 'PT Riset Cerdas', deadline: '2025-02-20', daysLeft: 21 },
+    { id: 3, title: 'Machine Learning Engineer di PT AI Cerdas', company: 'PT AI Cerdas', deadline: '2025-02-25', daysLeft: 26 },
+  ];
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
@@ -170,11 +147,11 @@ const StudentDashboardPage = () => {
               <div className="flex items-center space-x-2">
                 <div className={`h-10 w-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center`}>
                   <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                    {userInitial}
+                    {studentProfile?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
                   </span>
                 </div>
                 <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>
-                  {userName}
+                  {studentProfile?.name || user?.email?.split('@')[0] || 'Mahasiswa'}
                 </span>
               </div>
             </div>
@@ -186,7 +163,10 @@ const StudentDashboardPage = () => {
         {/* Sidebar */}
         {(sidebarOpen || window.innerWidth >= 768) && (
           <div className="hidden md:block">
-            <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
+            <Sidebar
+              darkMode={darkMode}
+              userProfile={user ? { name: user.email.split('@')[0], email: user.email } : undefined}
+            />
           </div>
         )}
 
@@ -200,17 +180,28 @@ const StudentDashboardPage = () => {
 
         {sidebarOpen && window.innerWidth < 768 && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
-            <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
+            <Sidebar
+              darkMode={darkMode}
+              userProfile={user ? { name: user.email.split('@')[0], email: user.email } : undefined}
+            />
           </div>
         )}
 
         {/* Main Content */}
         <main className={`flex-1 ${sidebarOpen ? 'md:ml-64' : ''} p-6 pt-12`}>
           <div className="max-w-[1200px] mx-auto">
-            <h1 className={`text-2xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Selamat Datang di Dashboard Mahasiswa</h1>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+              <div>
+                <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Dashboard Mahasiswa</h1>
+                <p className={`mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Kelola profil, lamaran, dan pencarian magang Anda</p>
+              </div>
+              <div className={`mt-4 md:mt-0 px-4 py-2 rounded-lg ${darkMode ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-100 text-blue-800'}`}>
+                <span className="font-medium">Semester 5</span>
+              </div>
+            </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {stats.map((stat, index) => (
                 <div
                   key={index}
@@ -220,125 +211,95 @@ const StudentDashboardPage = () => {
                     <div>
                       <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{stat.title}</p>
                       <p className={`text-2xl font-bold mt-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{stat.value}</p>
-                      <p className={`text-sm mt-2 ${stat.change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{stat.change}</p>
+                      <p className={`text-sm mt-2 ${
+                        stat.change.startsWith('+')
+                          ? 'text-green-500'
+                          : stat.change.startsWith('-')
+                          ? 'text-red-500'
+                          : 'text-gray-500'
+                      }`}>{stat.change}</p>
                     </div>
-                    <div className="text-2xl">{stat.icon}</div>
+                    <div className={`text-2xl ${
+                      stat.color === 'blue' ? 'text-blue-500' :
+                      stat.color === 'green' ? 'text-green-500' :
+                      'text-purple-500'
+                    }`}>
+                      {stat.icon}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Charts and Activity Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Application Status Overview */}
+              {/* Recent Activities */}
               <div className={`lg:col-span-2 rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ikhtisar Lamaran</h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-green-900/20' : 'bg-green-50'} border ${darkMode ? 'border-green-800' : 'border-green-200'}`}>
-                    <p className={`text-sm ${darkMode ? 'text-green-400' : 'text-green-700'}`}>Diterima</p>
-                    <p className="text-2xl font-bold text-green-500">2</p>
-                  </div>
-                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-yellow-900/20' : 'bg-yellow-50'} border ${darkMode ? 'border-yellow-800' : 'border-yellow-200'}`}>
-                    <p className={`text-sm ${darkMode ? 'text-yellow-400' : 'text-yellow-700'}`}>Dalam Proses</p>
-                    <p className="text-2xl font-bold text-yellow-500">3</p>
-                  </div>
-                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${darkMode ? 'border-red-800' : 'border-red-200'}`}>
-                    <p className={`text-sm ${darkMode ? 'text-red-400' : 'text-red-700'}`}>Ditolak</p>
-                    <p className="text-2xl font-bold text-red-500">1</p>
-                  </div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Aktivitas Terkini</h2>
+                  <button
+                    onClick={() => router.push('/dashboard-student/messages')}
+                    className={`text-sm ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}`}
+                  >
+                    Lihat semua
+                  </button>
                 </div>
-
-                {/* Progress and Conversion Rate */}
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tingkat Keberhasilan Lamaran</span>
-                    <span className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>40%</span>
-                  </div>
-                  <div className={`w-full h-3 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                    <div className="bg-green-500 h-3 rounded-full" style={{ width: '40%' }}></div>
-                  </div>
-                </div>
-
-                {/* Recent Applications */}
-                <div>
-                  <h3 className={`font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Lamaran Terbaru</h3>
-                  <div className="space-y-4">
-                    {applications.map(app => (
-                      <div key={app.id} className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0">
-                        <div>
-                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {app.position} di {app.company}
-                          </p>
-                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{app.date}</p>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(app.status)}`}>
-                          {app.status}
-                        </span>
+                <div className="space-y-4">
+                  {recentActivities.map((activity) => (
+                    <div key={activity.id} className="flex items-start border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
+                      <div className={`mr-3 mt-1 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                        activity.type === 'application' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                        activity.type === 'update' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                        activity.type === 'message' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                        'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                      }`}>
+                        {activity.type === 'application' ? '📋' :
+                         activity.type === 'update' ? '🔄' :
+                         activity.type === 'message' ? '💬' :
+                         '✅'}
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{activity.activity}</p>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{activity.time}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Quick Actions */}
+              {/* Upcoming Deadlines */}
               <div className={`rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tindakan Cepat</h2>
-                <div className="space-y-3">
-                  <a
-                    href="#"
-                    onClick={handleQuickApplyClick}
-                    className={`block w-full text-left px-4 py-3 rounded-lg ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-colors cursor-pointer`}
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Batas Waktu Mendatang</h2>
+                  <button
+                    onClick={() => router.push('/dashboard-student/find-internships')}
+                    className={`text-sm ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}`}
                   >
-                    Ajukan Lamaran Magang
-                  </a>
+                    Lihat semua
+                  </button>
                 </div>
-
-                {/* Follow Up on Accepted Applications */}
-                <div className={`mt-6 pt-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                  <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Lanjutkan ke Wawancara</h2>
-                  <div className="space-y-4">
-                    <div className={`p-4 rounded-lg ${darkMode ? 'bg-blue-900/20' : 'bg-blue-50'} border ${darkMode ? 'border-blue-800' : 'border-blue-200'}`}>
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className={`font-semibold ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>UI/UX Designer</h3>
-                        <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">Diterima</span>
+                <div className="space-y-4">
+                  {deadlines.map((deadline) => (
+                    <div key={deadline.id} className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{deadline.title}</p>
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{deadline.company}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          deadline.daysLeft <= 5
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                            : deadline.daysLeft <= 10
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                            : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                        }`}>
+                          {deadline.daysLeft} hari
+                        </span>
                       </div>
-                      <p className={`text-sm mb-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>PT Teknologi Maju</p>
-                      <div className="flex space-x-2">
-                        <button className={`flex-1 py-2 rounded-lg text-sm ${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white`}>
-                          Setuju
-                        </button>
-                        <button className={`flex-1 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-300 hover:bg-gray-400'} text-white`}>
-                          Tunda
-                        </button>
-                      </div>
+                      <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Batas: {new Date(deadline.deadline).toLocaleDateString('id-ID')}
+                      </p>
                     </div>
-                    <div className={`p-4 rounded-lg ${darkMode ? 'bg-blue-900/20' : 'bg-blue-50'} border ${darkMode ? 'border-blue-800' : 'border-blue-200'}`}>
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className={`font-semibold ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>Frontend Developer</h3>
-                        <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">Diterima</span>
-                      </div>
-                      <p className={`text-sm mb-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>PT Digital Solusi</p>
-                      <div className="flex space-x-2">
-                        <button className={`flex-1 py-2 rounded-lg text-sm ${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white`}>
-                          Setuju
-                        </button>
-                        <button className={`flex-1 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-300 hover:bg-gray-400'} text-white`}>
-                          Tunda
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Upcoming Deadline */}
-                <div className={`mt-6 pt-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                  <h2 className={`text-xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Batas Waktu Mendatang</h2>
-                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${darkMode ? 'border-red-800' : 'border-red-200'}`}>
-                    <p className={`font-medium ${darkMode ? 'text-red-300' : 'text-red-700'}`}>UI/UX Designer - PT Teknologi Maju</p>
-                    <p className={`text-sm mt-1 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>Batas waktu: 3 hari lagi</p>
-                    <p className={`text-xs mt-2 ${darkMode ? 'text-red-500' : 'text-red-500'}`}>Status: Menunggu Review</p>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>

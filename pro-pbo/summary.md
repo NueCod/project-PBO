@@ -1,5 +1,5 @@
 Ringkasan Aplikasi
-Nama (Saran): InternBridge atau MagangConnect Deskripsi: Sebuah platform web terintegrasi yang mempertemukan mahasiswa (aktif/fresh graduate) dengan perusahaan. Platform ini memfasilitasi siklus perekrutan magang dari hulu ke hilir: mulai dari pembuatan profil, pencarian lowongan, pengiriman lamaran dan dokumen, hingga proses seleksi oleh perusahaan.
+Nama (Saran): InternSheep atau MagangConnect Deskripsi: Sebuah platform web terintegrasi yang mempertemukan mahasiswa (aktif/fresh graduate) dengan perusahaan. Platform ini memfasilitasi siklus perekrutan magang dari hulu ke hilir: mulai dari pembuatan profil, pencarian lowongan, pengiriman lamaran dan dokumen, hingga proses seleksi oleh perusahaan.
 
 Nilai Tambah:
 

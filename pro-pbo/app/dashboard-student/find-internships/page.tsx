@@ -1,14 +1,12 @@
-import { notFound } from 'next/navigation';
+// app/dashboard-student/find-internships/page.tsx
+'use client';
+
 import FindInternshipsPageClient from './FindInternshipsPageClient';
 
-type FindInternshipsPageProps = {
-  searchParams?: { [key: string]: string | string[] | undefined };
-};
-
-const FindInternshipsPage = ({ searchParams }: FindInternshipsPageProps) => {
-  return (
-    <FindInternshipsPageClient searchParams={searchParams} />
-  );
+// For now, we'll pass an empty array since the client component will fetch the data
+// In the future, we might want to fetch data server-side for SEO and performance
+const FindInternshipsPage = () => {
+  return <FindInternshipsPageClient />;
 };
 
 export default FindInternshipsPage;

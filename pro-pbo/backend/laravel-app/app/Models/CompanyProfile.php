@@ -23,6 +23,8 @@ class CompanyProfile extends Model
         'website_url',
         'address',
         'logo_url',
+        'contact_email',
+        'contact_phone',
     ];
 
     // --- Relasi ---

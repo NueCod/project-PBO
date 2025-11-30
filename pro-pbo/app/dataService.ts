@@ -38,8 +38,8 @@ export class DataService {
   static getFAQs(): FAQ[] {
     return [
       {
-        question: "Siapa saja yang dapat menggunakan InternBridge?",
-        answer: "InternBridge melayani mahasiswa aktif dan lulusan baru yang mencari magang atau pengalaman kerja pertama."
+        question: "Siapa saja yang dapat menggunakan InternSheep?",
+        answer: "InternSheep melayani mahasiswa aktif dan lulusan baru yang mencari magang atau pengalaman kerja pertama."
       },
       {
         question: "Bagaimana cara memverifikasi status mahasiswa?",

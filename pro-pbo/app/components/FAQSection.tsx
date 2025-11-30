@@ -11,7 +11,7 @@ const FAQSection = ({ darkMode, openFaqIndex, toggleFaq }: SectionProps & Toggle
         <div className="text-center mb-16">
           <h2 className={`text-[2rem] sm:text-[2.5rem] md:text-[3rem] font-bold mb-4 ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>Pertanyaan Umum</h2>
           <p className={`text-base sm:text-lg md:text-xl ${darkMode ? 'text-gray-300' : 'text-[#737373]'}`}>
-            Segala yang perlu Anda ketahui tentang InternBridge.
+            Segala yang perlu Anda ketahui tentang InternSheep.
           </p>
         </div>
         <div className="space-y-4">

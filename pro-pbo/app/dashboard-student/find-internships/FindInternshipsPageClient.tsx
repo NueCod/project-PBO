@@ -2,38 +2,45 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/authContext';
+import { getStudentProfile } from '../../lib/apiService';
+import { getAllInternships } from '../../services/internshipService';
 import Sidebar from '../../components/Sidebar';
 
 type Internship = {
-  id: number;
+  id: string;
   title: string;
   company: string;
   location: string;
-  type: 'On-site' | 'Remote' | 'Hybrid';
+  type: 'wfo' | 'wfh' | 'hybrid'; // Updated to match backend values
   duration: string;
   posted: string;
   deadline: string;
   description: string;
-  requirements: string[];
+  requirements: string[]; // Array of requirements
   status: 'Open' | 'Closed' | 'Filled';
-  tags: string[];
+  tags: string[]; // Array of tags/skills
+  paid: 'paid' | 'unpaid';
+  minSemester: number;
+  salary?: string;
+  isPaid: boolean;
+  salaryAmount?: string;
 };
 
-type FindInternshipsPageClientProps = {
-  searchParams?: { [key: string]: string | string[] | undefined };
-};
-
-const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientProps) => {
+const FindInternshipsPageClient = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [internships, setInternships] = useState<Internship[]>([]);
+  const [internshipsList, setInternshipsList] = useState<Internship[]>([]);
   const [skillFilter, setSkillFilter] = useState('');
   const [majorFilter, setMajorFilter] = useState('');
-  const [specificationFilter, setSpecificationFilter] = useState('');
-  const [universityFilter, setUniversityFilter] = useState('');
+  const [semesterFilter, setSemesterFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const { token } = useAuth();
 
   useEffect(() => {
     // Check system preference for dark mode
@@ -71,129 +78,56 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Sample internship data
+  // Initialize mobile detection and set initial state
   useEffect(() => {
-    const mockInternships: Internship[] = [
-      {
-        id: 1,
-        title: 'UI/UX Designer',
-        company: 'PT Teknologi Maju',
-        location: 'Jakarta',
-        type: 'Hybrid',
-        duration: '6 months',
-        posted: '2024-10-15',
-        deadline: '2024-11-30',
-        description: 'Looking for a creative UI/UX designer to join our team and help design user-friendly interfaces for our products.',
-        requirements: ['Figma', 'Adobe XD', 'User Research', 'Prototyping'],
-        status: 'Open',
-        tags: ['Design', 'Technology']
-      },
-      {
-        id: 2,
-        title: 'Backend Developer',
-        company: 'PT Digital Solusi',
-        location: 'Bandung',
-        type: 'On-site',
-        duration: '4 months',
-        posted: '2024-10-18',
-        deadline: '2024-11-25',
-        description: 'Join our backend team to develop and maintain server-side applications using modern technologies.',
-        requirements: ['Node.js', 'Python', 'API Development', 'Database Design'],
-        status: 'Open',
-        tags: ['Technology', 'Engineering']
-      },
-      {
-        id: 3,
-        title: 'Marketing Intern',
-        company: 'PT Kreatif Indonesia',
-        location: 'Surabaya',
-        type: 'On-site',
-        duration: '3 months',
-        posted: '2024-10-22',
-        deadline: '2024-12-05',
-        description: 'Assist our marketing team in developing campaigns and analyzing market trends.',
-        requirements: ['Social Media', 'Content Creation', 'Marketing Strategy', 'Analytics'],
-        status: 'Open',
-        tags: ['Marketing', 'Business']
-      },
-      {
-        id: 4,
-        title: 'Data Analyst',
-        company: 'PT Analitika Cerdas',
-        location: 'Remote',
-        type: 'Remote',
-        duration: '6 months',
-        posted: '2024-10-20',
-        deadline: '2024-12-10',
-        description: 'Analyze business data to provide actionable insights and recommendations for decision making.',
-        requirements: ['SQL', 'Python', 'Data Visualization', 'Statistical Analysis'],
-        status: 'Open',
-        tags: ['Data', 'Analytics']
-      },
-      {
-        id: 5,
-        title: 'Frontend Developer',
-        company: 'PT Web Inovasi',
-        location: 'Yogyakarta',
-        type: 'Hybrid',
-        duration: '5 months',
-        posted: '2024-10-25',
-        deadline: '2024-11-20',
-        description: 'Work on the frontend development of our web applications using modern JavaScript frameworks.',
-        requirements: ['React', 'JavaScript', 'CSS', 'Responsive Design'],
-        status: 'Closed',
-        tags: ['Technology', 'Web Development']
-      }
-    ];
-    setInternships(mockInternships);
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Check on mount
+    if (typeof window !== 'undefined') {
+      checkMobile();
+
+      // Add resize listener
+      window.addEventListener('resize', checkMobile);
+
+      // Clean up listener on unmount
+      return () => window.removeEventListener('resize', checkMobile);
+    }
   }, []);
 
-  // Mock function to get student profile data
-  const getStudentProfile = async () => {
-    // In a real application, this would fetch from an API
-    return {
-      id: 'student-1',
-      name: 'Budi Santoso',
-      email: 'budi.santoso@example.com',
-      university: 'Universitas Indonesia',
-      major: 'Teknik Informatika',
-      skills: ['JavaScript', 'React', 'Node.js', 'Python', 'UI/UX Design'],
-      location: 'Jakarta',
-      interests: ['Web Development', 'Mobile Apps'],
-      experience: ['Frontend Developer Intern', 'UI Design Freelancer'],
-      education: ['S1 Teknik Informatika, UI', 'SMA Jurusan IPA'],
-    };
+  // Fetch internships from API
+  const fetchInternships = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllInternships();
+      setInternshipsList(data);
+    } catch (error) {
+      console.error('Error fetching internships:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Initialize filters from query parameters when page loads
+  // Fetch internships when component mounts
   useEffect(() => {
-    const initializeFilters = async () => {
-      if (searchParams?.prefiltered === 'true') {
-        const profile = await getStudentProfile();
-        setLocationFilter(searchParams?.location as string || profile.location); // Student's location
-        setSkillFilter(searchParams?.skills as string || profile.skills.join(',')); // Student's skills
-        setMajorFilter(searchParams?.major as string || profile.major); // Student's major
-        setSpecificationFilter(searchParams?.interests as string || profile.interests.join(',')); // Student's interests
-        setUniversityFilter(searchParams?.university as string || profile.university); // Student's university
-      } else {
-        // Clear filters if not prefiltering
-        setLocationFilter('');
-        setSkillFilter('');
-        setMajorFilter('');
-        setSpecificationFilter('');
-        setUniversityFilter('');
-      }
-    };
+    fetchInternships();
+  }, []);
 
-    initializeFilters();
-  }, [searchParams]);
+  // Expose fetchInternships function to parent or for manual calls
+  useEffect(() => {
+    // This effect can be extended to respond to certain events
+    // For example, we could listen to a custom event or a query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('refresh') === 'true') {
+      fetchInternships();
+    }
+  }, []);
 
   // State for user profile
   const [userName, setUserName] = useState<string>('User');
   const [userEmail, setUserEmail] = useState<string>('user@example.com');
   const [userInitial, setUserInitial] = useState<string>('U');
-
-  const { token } = useAuth();
 
   // Fetch user profile to get name
   useEffect(() => {
@@ -214,7 +148,7 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
   }, [token]);
 
   // Filter internships based on search and filters
-  const filteredInternships = internships.filter(internship => {
+  const filteredInternships = (internshipsList || []).filter(internship => {
     const matchesSearch =
       internship.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       internship.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -232,47 +166,29 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
     let matchesSkills = skillFilter === '';
     if (skillFilter !== '') {
       const skillList = skillFilter.split(',').map(s => s.trim().toLowerCase());
-      matchesSkills = internship.requirements.some(req =>
+      matchesSkills = (internship.requirements || []).some(req =>
         skillList.some(skill => req.toLowerCase().includes(skill.toLowerCase()) ||
                   skill.toLowerCase().includes(req.toLowerCase()))
       );
     }
 
-    // Additional filters based on specifications (majors, fields, etc.) (handle comma-separated values)
-    let matchesSpecification = specificationFilter === '';
-    if (specificationFilter !== '') {
-      const specList = specificationFilter.split(',').map(s => s.trim().toLowerCase());
-      matchesSpecification = internship.tags.some(tag =>
-        specList.some(spec => tag.toLowerCase().includes(spec.toLowerCase()) ||
-                   spec.toLowerCase().includes(tag.toLowerCase()))
-      );
-    }
-
-    // Additional filters based on major (handle comma-separated values)
+    // Additional filters based on major (check against requirements array)
     let matchesMajor = majorFilter === '';
     if (majorFilter !== '') {
       const majorList = majorFilter.split(',').map(m => m.trim().toLowerCase());
-      matchesMajor = majorList.some(major =>
-        major.toLowerCase().includes(internship.title.toLowerCase()) ||
-        internship.title.toLowerCase().includes(major.toLowerCase()) ||
-        major.toLowerCase().includes(internship.description.toLowerCase()) ||
-        internship.description.toLowerCase().includes(major.toLowerCase())
+      matchesMajor = (internship.requirements || []).some(req =>
+        majorList.some(major => req.toLowerCase().includes(major.toLowerCase()) ||
+                  major.toLowerCase().includes(req.toLowerCase()))
       );
     }
 
-    // Additional filters based on university (handle comma-separated values)
-    let matchesUniversity = universityFilter === '';
-    if (universityFilter !== '') {
-      const universityList = universityFilter.split(',').map(u => u.trim().toLowerCase());
-      matchesUniversity = universityList.some(university =>
-        university.toLowerCase().includes(internship.title.toLowerCase()) ||
-        internship.title.toLowerCase().includes(university.toLowerCase()) ||
-        university.toLowerCase().includes(internship.description.toLowerCase()) ||
-        internship.description.toLowerCase().includes(university.toLowerCase())
-      );
-    }
+    // Additional filter for semester - user's current semester should meet or exceed the minimum requirement
+    let matchesSemester = semesterFilter === '' || (parseInt(semesterFilter) || 0) >= internship.minSemester;
 
-    return matchesSearch && matchesLocation && matchesType && matchesSkills && matchesSpecification && matchesMajor && matchesUniversity;
+    // Additional filter for paid/unpaid status
+    let matchesStatus = statusFilter === '' || internship.paid === statusFilter;
+
+    return matchesSearch && matchesLocation && matchesType && matchesSkills && matchesMajor && matchesSemester && matchesStatus;
   });
 
   const { user } = useAuth();
@@ -327,21 +243,21 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
 
       <div className="flex pt-16">
         {/* Sidebar */}
-        {(sidebarOpen || window.innerWidth >= 768) && (
+        {(sidebarOpen || !isMobile) && (
           <div className="hidden md:block">
             <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
           </div>
         )}
 
         {/* Mobile sidebar overlay */}
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && isMobile && (
           <div
             className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
             onClick={() => setSidebarOpen(false)}
           ></div>
         )}
 
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && isMobile && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
             <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
           </div>
@@ -350,7 +266,37 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
         {/* Main Content */}
         <main className={`flex-1 ${sidebarOpen ? 'md:ml-64' : ''} p-6 pt-12`}>
           <div className="max-w-[1200px] mx-auto">
-            <h1 className={`text-2xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Cari Program Magang</h1>
+            <div className="flex justify-between items-center mb-6">
+              <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Cari Program Magang</h1>
+              <button
+                onClick={fetchInternships}
+                disabled={loading}
+                className={`flex items-center px-4 py-2 rounded-lg ${
+                  loading
+                    ? 'bg-gray-300 cursor-not-allowed'
+                    : darkMode
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-blue-500 hover:bg-blue-600'
+                } text-white transition-colors`}
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Memuat...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Segarkan
+                  </>
+                )}
+              </button>
+            </div>
 
             {/* Search and Filters */}
             <div className={`rounded-xl p-6 shadow mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
@@ -376,14 +322,24 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                 
                 <div>
                   <label htmlFor="location" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Lokasi</label>
-                  <input
-                    type="text"
+                  <select
                     id="location"
-                    placeholder="Kota atau wilayah"
                     value={locationFilter}
                     onChange={(e) => setLocationFilter(e.target.value)}
                     className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  />
+                  >
+                    <option value="">Semua Lokasi</option>
+                    <option value="Jakarta">Jakarta</option>
+                    <option value="Surabaya">Surabaya</option>
+                    <option value="Bandung">Bandung</option>
+                    <option value="Yogyakarta">Yogyakarta</option>
+                    <option value="Medan">Medan</option>
+                    <option value="Makassar">Makassar</option>
+                    <option value="Semarang">Semarang</option>
+                    <option value="Malang">Malang</option>
+                    <option value="Bali">Bali</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
                 </div>
                 
                 <div>
@@ -395,8 +351,8 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                     className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   >
                     <option value="all">Semua Tipe</option>
-                    <option value="on-site">On-site</option>
-                    <option value="remote">Remote</option>
+                    <option value="wfo">WFO</option>
+                    <option value="wfh">WFH</option>
                     <option value="hybrid">Hybrid</option>
                   </select>
                 </div>
@@ -415,56 +371,63 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                 </div>
 
                 <div>
-                  <label htmlFor="specification" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Spesifikasi</label>
-                  <input
-                    type="text"
-                    id="specification"
-                    placeholder="Teknologi, Design, dll"
-                    value={specificationFilter}
-                    onChange={(e) => setSpecificationFilter(e.target.value)}
+                  <label htmlFor="semester" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Min. Semester</label>
+                  <select
+                    id="semester"
+                    value={semesterFilter}
+                    onChange={(e) => setSemesterFilter(e.target.value)}
                     className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  />
+                  >
+                    <option value="">Semua Semester</option>
+                    <option value="1">Semester 1</option>
+                    <option value="2">Semester 2</option>
+                    <option value="3">Semester 3</option>
+                    <option value="4">Semester 4</option>
+                    <option value="5">Semester 5</option>
+                    <option value="6">Semester 6</option>
+                    <option value="7">Semester 7</option>
+                    <option value="8">Semester 8</option>
+                  </select>
                 </div>
 
                 <div>
-                  <label htmlFor="major" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Jurusan</label>
-                  <input
-                    type="text"
-                    id="major"
-                    placeholder="Teknik Informatika, Desain Grafis, dll"
-                    value={majorFilter}
-                    onChange={(e) => setMajorFilter(e.target.value)}
+                  <label htmlFor="status" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status</label>
+                  <select
+                    id="status"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
                     className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="university" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Universitas</label>
-                  <input
-                    type="text"
-                    id="university"
-                    placeholder="Universitas Indonesia, ITB, dll"
-                    value={universityFilter}
-                    onChange={(e) => setUniversityFilter(e.target.value)}
-                    className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  />
+                  >
+                    <option value="">Semua Status</option>
+                    <option value="paid">Berbayar</option>
+                    <option value="unpaid">Tidak Berbayar</option>
+                  </select>
                 </div>
               </div>
             </div>
 
             {/* Results Count */}
             <div className="mb-4">
-              <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Menemukan <span className="font-semibold">{filteredInternships.length}</span> program magang
-              </p>
+              {!loading && (
+                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Menemukan <span className="font-semibold">{filteredInternships.length}</span> program magang
+                </p>
+              )}
             </div>
+
+            {/* Loading indicator */}
+            {loading && (
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f59e0b]"></div>
+              </div>
+            )}
 
             {/* Internship Listings */}
             <div className="space-y-4">
-              {filteredInternships.length > 0 ? (
-                filteredInternships.map(internship => (
-                  <div 
-                    key={internship.id} 
+              {!loading && (filteredInternships || []).length > 0 ? (
+                (filteredInternships || []).map(internship => (
+                  <div
+                    key={internship.id}
                     className={`rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${internship.status === 'Closed' ? (darkMode ? 'border-red-700' : 'border-red-300') : (darkMode ? 'border-gray-700' : 'border-gray-200')}`}
                   >
                     <div className="flex justify-between items-start">
@@ -492,7 +455,9 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
-                            {internship.type}
+                            {internship.type === 'wfo' ? 'WFO' :
+                             internship.type === 'wfh' ? 'WFH' :
+                             'Hybrid'}
                           </span>
                           <span className={`flex items-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -503,19 +468,30 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                         </div>
                         
                         <p className={`mt-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{internship.description}</p>
-                        
+
                         <div className="mt-4 flex flex-wrap gap-2">
-                          {internship.tags.map((tag, index) => (
-                            <span 
-                              key={index} 
+                          {(internship.tags || []).map((tag, index) => (
+                            <span
+                              key={index}
                               className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}
                             >
                               {tag}
                             </span>
                           ))}
                         </div>
-                        
+
                         <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs ${internship.paid === 'paid' ? (darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800') : (darkMode ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-800')}`}>
+                            {internship.paid === 'paid' ? 'Berbayar' : 'Tidak Berbayar'}
+                          </span>
+                          {internship.salary && (
+                            <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'}`}>
+                              {internship.salary}
+                            </span>
+                          )}
+                          <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-800'}`}>
+                            Minimal: Smt {internship.minSemester}
+                          </span>
                           <span className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Berakhir: {internship.deadline}</span>
                           <span className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Diposting: {internship.posted}</span>
                         </div>
@@ -539,7 +515,7 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                       <h4 className={`text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Persyaratan:</h4>
                       <ul className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {internship.requirements.map((req, index) => (
+                        {(internship.requirements || []).map((req, index) => (
                           <li key={index} className="flex items-center">
                             <svg className={`w-4 h-4 mr-1.5 ${darkMode ? 'text-green-400' : 'text-green-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -551,7 +527,7 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                     </div>
                   </div>
                 ))
-              ) : (
+              ) : !loading ? (
                 <div className={`rounded-xl p-12 text-center ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow`}>
                   <svg className={`w-16 h-16 mx-auto ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -561,7 +537,7 @@ const FindInternshipsPageClient = ({ searchParams }: FindInternshipsPageClientPr
                     Tidak ada magang yang cocok dengan pencarian Anda. Coba istilah pencarian atau filter yang berbeda.
                   </p>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </main>

@@ -175,3 +175,94 @@ export const getStudentProfile = async (token: string): Promise<StudentProfile> 
     throw error;
   }
 };
+
+// --- Profil Perusahaan ---
+export interface UpdateCompanyProfileRequest {
+  name?: string;
+  description?: string;
+  industry?: string;
+  location?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  website?: string;
+  logo?: string;
+}
+
+export interface CompanyProfile {
+  id?: string;
+  name: string;
+  description: string;
+  industry: string;
+  location: string;
+  contactEmail: string;
+  contactPhone: string;
+  website: string;
+  logo?: string;
+}
+
+export const updateCompanyProfile = async (
+  token: string,
+  profileData: UpdateCompanyProfileRequest
+): Promise<CompanyProfile> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/profile/company`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`, // Kirim token di header
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(profileData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+      throw new Error(`Update company profile failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+    }
+
+    const responseData = await response.json();
+    console.log('Raw API response for update company profile:', responseData);
+
+    // Jika respons berisi profile di dalam object, maka kita perlu mengaksesnya
+    // Format respons dari controller: { message: "...", profile: {...} }
+    if (responseData.profile) {
+      return responseData.profile;
+    }
+
+    // Jika tidak, kembalikan langsung (untuk kasus jika format respons berubah)
+    return responseData;
+  } catch (error) {
+    console.error('Update company profile error:', error);
+    throw error;
+  }
+};
+
+export const getCompanyProfile = async (token: string): Promise<CompanyProfile> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/profile/company`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`, // Kirim token di header
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+      throw new Error(`Get company profile failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+    }
+
+    const responseData = await response.json();
+    console.log('Raw API response for get company profile:', responseData);
+
+    // Jika respons berisi profile di dalam object, maka kita perlu mengaksesnya
+    // Misalnya: { profile: {...} } daripada langsung {...}
+    if (responseData.profile) {
+      return responseData.profile;
+    }
+
+    return responseData;
+  } catch (error) {
+    console.error('Get company profile error:', error);
+    throw error;
+  }
+};

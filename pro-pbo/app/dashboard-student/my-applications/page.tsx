@@ -177,7 +177,27 @@ const MyApplicationsPage = () => {
   const [userEmail, setUserEmail] = useState<string>('user@example.com');
   const [userInitial, setUserInitial] = useState<string>('U');
 
+  // State for interview details modal
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+
+  // State for application detail modal
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedDetailApplication, setSelectedDetailApplication] = useState<Application | null>(null);
+
   const { token } = useAuth();
+
+  // Function to show interview details modal
+  const showInterviewDetails = (app: Application) => {
+    setSelectedApplication(app);
+    setShowInterviewModal(true);
+  };
+
+  // Function to show application detail modal
+  const showApplicationDetail = (app: Application) => {
+    setSelectedDetailApplication(app);
+    setShowDetailModal(true);
+  };
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -402,19 +422,29 @@ const MyApplicationsPage = () => {
                       </div>
                       
                       <div className="ml-0 md:ml-4 mt-4 md:mt-0 flex flex-col space-y-2">
-                        <button 
-                          className={`px-4 py-2 rounded-lg ${
-                            app.status === 'Accepted' 
-                              ? `${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white` 
-                              : `${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`
-                          }`}
-                          disabled={app.status !== 'Accepted'}
-                        >
-                          {app.status === 'Accepted' ? 'Lanjutkan Wawancara' : 'Detail'}
-                        </button>
-                        <button className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                          Lacak Lamaran
-                        </button>
+                        {app.status === 'Accepted' ? (
+                          <>
+                            <button
+                              className={`${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white px-4 py-2 rounded-lg`}
+                              onClick={() => showInterviewDetails(app)}
+                            >
+                              Lanjutkan Wawancara
+                            </button>
+                            <button
+                              className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'} px-4 py-2 rounded-lg`}
+                              onClick={() => showApplicationDetail(app)}
+                            >
+                              Detail
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'} px-4 py-2 rounded-lg`}
+                            onClick={() => showApplicationDetail(app)}
+                          >
+                            Detail
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -433,6 +463,131 @@ const MyApplicationsPage = () => {
             </div>
           </div>
         </main>
+
+        {/* Interview Details Modal */}
+        {showInterviewModal && selectedApplication && (
+          <div className="fixed inset-0 backdrop-blur-md bg-black/20 dark:bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className={`rounded-xl shadow-lg w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Detail Wawancara</h2>
+                  <button
+                    onClick={() => setShowInterviewModal(false)}
+                    className={`text-2xl ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{selectedApplication.title}</h3>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedApplication.company}</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 className={`font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Jadwal Wawancara</h4>
+                    <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tanggal: 22 November 2024</p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Waktu: 10:00 WIB</p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Metode: Online (Google Meet)</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <h4 className={`font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Persyaratan Tambahan</h4>
+                    <ul className="space-y-1">
+                      {selectedApplication.requirements.map((req, index) => (
+                        <li key={index} className={`flex items-start text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <span className="mr-2">•</span> {req}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="pt-4 flex justify-end space-x-3">
+                    <button
+                      onClick={() => setShowInterviewModal(false)}
+                      className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                    >
+                      Tutup
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Mock confirmation action - in a real app, this would make an API call
+                        alert('Terima kasih! Konfirmasi kehadiran wawancara telah dikirim.');
+                        setShowInterviewModal(false);
+                      }}
+                      className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white`}
+                    >
+                      Konfirmasi Kehadiran
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Application Detail Modal */}
+        {showDetailModal && selectedDetailApplication && (
+          <div className="fixed inset-0 backdrop-blur-md bg-black/20 dark:bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className={`rounded-xl shadow-lg w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Detail Lamaran</h2>
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    className={`text-2xl ${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{selectedDetailApplication.title}</h3>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedDetailApplication.company}</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 className={`font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status Lamaran</h4>
+                    <div className={`p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status: {selectedDetailApplication.status}</p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tanggal Lamar: {selectedDetailApplication.appliedDate}</p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Deadline: {selectedDetailApplication.deadline}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <h4 className={`font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Deskripsi Pekerjaan</h4>
+                    <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{selectedDetailApplication.description}</p>
+                  </div>
+
+                  <div className="pt-2">
+                    <h4 className={`font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Persyaratan</h4>
+                    <ul className="space-y-1">
+                      {selectedDetailApplication.requirements.map((req, index) => (
+                        <li key={index} className={`flex items-start text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <span className="mr-2">•</span> {req}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="pt-4 flex justify-end">
+                    <button
+                      onClick={() => setShowDetailModal(false)}
+                      className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

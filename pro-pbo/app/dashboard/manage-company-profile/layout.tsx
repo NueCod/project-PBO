@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Kelola Profil Perusahaan | InternBridge",
+  title: "Kelola Profil Perusahaan | InternSheep",
   description: "Manage company profile information",
 };
 

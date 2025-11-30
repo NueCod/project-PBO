@@ -10,7 +10,7 @@ const Footer = ({ darkMode }: SectionProps) => {
       <div className="max-w-[1200px] mx-auto px-[40px]">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <h3 className="text-xl font-bold mb-6">InternBridge</h3>
+            <h3 className="text-xl font-bold mb-6">InternSheep</h3>
             <p className={`${darkMode ? 'text-gray-400' : 'text-[#a3a3a3]'}`}>
               Menghubungkan mahasiswa dengan peluang magang bermakna dan perusahaan dengan talenta terbaik.
             </p>
@@ -29,7 +29,7 @@ const Footer = ({ darkMode }: SectionProps) => {
           ))}
         </div>
         <div className={`border-t mt-12 pt-8 text-center ${darkMode ? 'border-gray-800 text-gray-400' : 'border-[#333333] text-[#a3a3a3]'}`}>
-          <p>&copy; 2025 InternBridge. Hak Cipta Dilindungi.</p>
+          <p>&copy; 2025 InternSheep. Hak Cipta Dilindungi.</p>
         </div>
       </div>
     </footer>

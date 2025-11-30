@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Cari Magang | InternBridge",
+  title: "Cari Magang | InternSheep",
   description: "Find internships as a student",
 };
 

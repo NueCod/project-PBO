@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../lib/authContext';
+import { useRouter } from 'next/navigation';
 import Sidebar from '../components/Sidebar';
 
 type StatCard = {
@@ -19,6 +21,57 @@ type Activity = {
 
 const DashboardPage = () => {
   const [darkMode, setDarkMode] = useState(false);
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  // Redirect based on user role
+  useEffect(() => {
+    if (!isLoading && user) {
+      if (user.role === 'student') {
+        router.push('/dashboard-student');
+      } else if (user.role === 'company') {
+        // Stay on this page for company users
+      } else if (user.role === 'admin') {
+        router.push('/dashboard-admin');
+      }
+    } else if (!isLoading && !user) {
+      // If user is not authenticated, redirect to login
+      router.push('/login');
+    }
+  }, [user, isLoading, router]);
+
+  // Show loading state while auth status is being determined
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <p>Memuat dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not loaded and not loading anymore, redirect to login
+  if (!user) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <p>Anda harus login terlebih dahulu.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is loaded but not a company, redirect appropriately
+  if (user.role !== 'company') {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <p>Halaman tidak ditemukan atau tidak diizinkan.</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     // Check system preference for dark mode
@@ -121,7 +174,10 @@ const DashboardPage = () => {
         {/* Sidebar */}
         {(sidebarOpen || window.innerWidth >= 768) && (
           <div className="hidden md:block">
-            <Sidebar darkMode={darkMode} />
+            <Sidebar
+              darkMode={darkMode}
+              userProfile={user ? { name: user.email.split('@')[0], email: user.email } : undefined}
+            />
           </div>
         )}
 
@@ -135,7 +191,10 @@ const DashboardPage = () => {
         
         {sidebarOpen && window.innerWidth < 768 && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
-            <Sidebar darkMode={darkMode} />
+            <Sidebar
+              darkMode={darkMode}
+              userProfile={user ? { name: user.email.split('@')[0], email: user.email } : undefined}
+            />
           </div>
         )}
 

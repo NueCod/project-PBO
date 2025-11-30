@@ -12,7 +12,7 @@ const BenefitsSection = ({ darkMode }: SectionProps) => {
     <section id="benefits" className={`py-20 px-5 ${darkMode ? 'bg-gray-900' : 'bg-[#f5f5f5]'}`}>
       <div className="max-w-[1200px] mx-auto px-[40px]">
         <div className="text-center mb-16">
-          <h2 className={`text-[3rem] font-bold mb-4 ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>Mengapa Memilih InternBridge?</h2>
+          <h2 className={`text-[3rem] font-bold mb-4 ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>Mengapa Memilih InternSheep?</h2>
           <p className={`text-xl max-w-3xl mx-auto ${darkMode ? 'text-gray-300' : 'text-[#737373]'}`}>
             Solusi lengkap untuk rekrutmen magang dari awal hingga akhir.
           </p>

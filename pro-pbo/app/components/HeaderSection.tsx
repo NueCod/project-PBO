@@ -25,7 +25,22 @@ const HeaderSection = ({ darkMode, toggleDarkMode, showThemeToggle = true }: Hea
       <div className="max-w-[1200px] mx-auto px-[40px] py-4">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <div className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>InternBridge</div>
+            <div className="w-15 h-15 mr-3">
+              {darkMode ? (
+                <img
+                  src="/Logo_Dark.png"
+                  alt="InternSheep Logo"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <img
+                  src="/Logo_Light.png"
+                  alt="InternSheep Logo"
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
+            <div className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>InternSheep</div>
           </div>
 
           {/* Desktop Navigation */}
@@ -60,25 +75,16 @@ const HeaderSection = ({ darkMode, toggleDarkMode, showThemeToggle = true }: Hea
               {showLoginDropdown && (
                 <div className={`absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 z-50 ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                   <a
-                    href="#"
+                    href="/login"
                     className={`block px-4 py-2 text-sm ${darkMode ? 'text-white hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      // Handle student login
-                      setShowLoginDropdown(false);
-                    }}
+                    onClick={() => setShowLoginDropdown(false)}
                   >
                     Mahasiswa
                   </a>
                   <a
-                    href="#"
+                    href="/login"
                     className={`block px-4 py-2 text-sm ${darkMode ? 'text-white hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      // Navigate to company dashboard
-                      window.location.href = '/dashboard';
-                      setShowLoginDropdown(false);
-                    }}
+                    onClick={() => setShowLoginDropdown(false)}
                   >
                     Perusahaan
                   </a>
@@ -171,25 +177,16 @@ const HeaderSection = ({ darkMode, toggleDarkMode, showThemeToggle = true }: Hea
               {showLoginDropdown && (
                 <div className={`mt-2 rounded-md shadow-lg py-1 z-50 ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                   <a
-                    href="#"
+                    href="/login"
                     className={`block px-4 py-2 text-sm ${darkMode ? 'text-white hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      // Handle student login
-                      setShowLoginDropdown(false);
-                    }}
+                    onClick={() => setShowLoginDropdown(false)}
                   >
                     Mahasiswa
                   </a>
                   <a
-                    href="#"
+                    href="/login"
                     className={`block px-4 py-2 text-sm ${darkMode ? 'text-white hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      // Navigate to company dashboard
-                      window.location.href = '/dashboard';
-                      setShowLoginDropdown(false);
-                    }}
+                    onClick={() => setShowLoginDropdown(false)}
                   >
                     Perusahaan
                   </a>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Dokumen Saya | InternBridge",
+  title: "Dokumen Saya | InternSheep",
   description: "Manage your documents",
 };
 

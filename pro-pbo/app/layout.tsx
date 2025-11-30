@@ -14,8 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "InternBridge",
+  title: "InternSheep",
   description: "Platform Magang Terintegrasi",
+  icons: {
+    icon: '/Tabicon.ico',
+  },
 };
 
 export default function RootLayout({

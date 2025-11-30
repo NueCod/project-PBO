@@ -1,37 +1,47 @@
+// app/dashboard/manage-company-profile/page.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../lib/authContext';
+import { getCompanyProfile, updateCompanyProfile } from '../../lib/apiService';
 import Sidebar from '../../components/Sidebar';
-import { CompanyProfile } from '../../interfaces';
-import Notification from '../../components/Notification';
 
-type FormErrors = {
-  name?: string;
-  industry?: string;
-  location?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  website?: string;
-  description?: string;
+type CompanyProfile = {
+  id: string;
+  name: string;
+  email: string;
+  description: string;
+  industry: string;
+  location: string;
+  contactEmail: string;
+  contactPhone: string;
+  website: string;
+  logo?: string;
 };
-
 
 const ManageCompanyProfilePage = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profile, setProfile] = useState<CompanyProfile>({
-    name: 'PT Maju Jaya',
-    description: 'Perusahaan berbasis teknologi yang fokus pada pengembangan solusi digital untuk bisnis.',
-    industry: 'Teknologi Informasi',
-    location: 'Jakarta, Indonesia',
-    contactEmail: 'info@majujaya.com',
-    contactPhone: '+62 21 1234 5678',
-    website: 'https://www.majujaya.com',
+    id: '',
+    name: '',
+    email: '',
+    description: '',
+    industry: '',
+    location: '',
+    contactEmail: '',
+    contactPhone: '',
+    website: '',
     logo: '',
   });
+  const [originalProfile, setOriginalProfile] = useState<CompanyProfile | null>(null); // Store original profile for comparison
   const [isEditing, setIsEditing] = useState(false);
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const { user, token, login } = useAuth(); // Dapatkan user, token, dan fungsi login dari context
 
   useEffect(() => {
     // Check system preference for dark mode
@@ -69,6 +79,27 @@ const ManageCompanyProfilePage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Load company profile
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (token) {
+        try {
+          setLoading(true);
+          const data = await getCompanyProfile(token);
+          setProfile(data);
+          setOriginalProfile(data); // Store original profile for comparison
+        } catch (error) {
+          console.error('Error loading company profile:', error);
+          setNotification({ message: 'Gagal memuat profil perusahaan. Silakan coba lagi.', type: 'error' });
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
+  }, [token]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setProfile(prev => ({
@@ -78,7 +109,7 @@ const ManageCompanyProfilePage = () => {
   };
 
   const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+    const newErrors: Record<string, string> = {};
 
     if (!profile.name.trim()) {
       newErrors.name = 'Nama perusahaan wajib diisi';
@@ -88,8 +119,8 @@ const ManageCompanyProfilePage = () => {
       newErrors.industry = 'Bidang industri wajib dipilih';
     }
 
-    if (!profile.location.trim()) {
-      newErrors.location = 'Lokasi perusahaan wajib diisi';
+    if (!profile.description.trim()) {
+      newErrors.description = 'Deskripsi perusahaan wajib diisi';
     }
 
     if (!profile.contactEmail.trim()) {
@@ -104,29 +135,48 @@ const ManageCompanyProfilePage = () => {
       newErrors.contactPhone = 'Format nomor telepon tidak valid';
     }
 
-    if (!profile.website.trim()) {
-      newErrors.website = 'Website wajib diisi';
-    } else if (!/^https?:\/\/.*/.test(profile.website)) {
+    if (profile.website && !/^https?:\/\/.*/.test(profile.website)) {
       newErrors.website = 'Format website harus dimulai dengan http:// atau https://';
-    }
-
-    if (!profile.description.trim()) {
-      newErrors.description = 'Deskripsi perusahaan wajib diisi';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (validateForm()) {
-      // In a real application, you would send the data to an API
-      console.log('Profile updated:', profile);
-      setIsEditing(false);
-      setErrors({});
-      setNotification({ message: 'Profil perusahaan berhasil diperbarui!', type: 'success' });
+      try {
+        if (token) {
+          await updateCompanyProfile(token, profile);
+
+          // Update the auth context user data to reflect changes in the header
+          if (user) {
+            // Update user with company name from profile
+            const updatedUser = {
+              ...user,
+              email: profile.email,
+              // Update company-specific data in user context if needed
+            };
+
+            // Update auth context with new user data
+            login(updatedUser, token); // Use login function to update user data in context
+          }
+
+          // Update the originalProfile to reflect the saved changes
+          setOriginalProfile({...profile});
+
+          setIsEditing(false);
+          setErrors({});
+          setNotification({ message: 'Profil perusahaan berhasil diperbarui!', type: 'success' });
+        } else {
+          setNotification({ message: 'Token autentikasi tidak ditemukan', type: 'error' });
+        }
+      } catch (error) {
+        console.error('Error updating company profile:', error);
+        setNotification({ message: 'Gagal memperbarui profil perusahaan. Silakan coba lagi.', type: 'error' });
+      }
     }
   };
 
@@ -134,15 +184,30 @@ const ManageCompanyProfilePage = () => {
     setNotification(null);
   };
 
+  if (loading) {
+    return (
+      <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f59e0b]"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
       {/* Notification */}
       {notification && (
-        <Notification
-          message={notification.message}
-          type={notification.type}
-          onClose={handleNotificationClose}
-        />
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+          notification.type === 'success' ? 'bg-green-100 text-green-800 border border-green-300' :
+          notification.type === 'error' ? 'bg-red-100 text-red-800 border border-red-300' :
+          'bg-blue-100 text-blue-800 border border-blue-300'
+        }`}>
+          <div className="flex justify-between items-center">
+            <span>{notification.message}</span>
+            <button onClick={handleNotificationClose} className="ml-4 text-xl">&times;</button>
+          </div>
+        </div>
       )}
 
       {/* Header */}
@@ -180,9 +245,13 @@ const ManageCompanyProfilePage = () => {
               </button>
               <div className="flex items-center space-x-2">
                 <div className={`h-10 w-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center`}>
-                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>P</span>
+                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                    {(originalProfile || profile).name.charAt(0).toUpperCase()}
+                  </span>
                 </div>
-                <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>PT Maju Jaya</span>
+                <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                  {(originalProfile || profile).name}
+                </span>
               </div>
             </div>
           </div>
@@ -224,7 +293,9 @@ const ManageCompanyProfilePage = () => {
                       setIsEditing(false);
                       setErrors({});
                     }}
-                    className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-300 hover:bg-gray-400'} text-white`}
+                    className={`px-4 py-2 rounded-lg ${
+                      darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-300 hover:bg-gray-400'
+                    } text-white`}
                   >
                     Batal
                   </button>
@@ -232,7 +303,9 @@ const ManageCompanyProfilePage = () => {
                 <button
                   type="button"
                   onClick={() => setIsEditing(!isEditing)}
-                  className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`}
+                  className={`px-4 py-2 rounded-lg ${
+                    darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'
+                  } text-white`}
                 >
                   {isEditing ? 'Lihat Profil' : 'Edit Profil'}
                 </button>
@@ -245,7 +318,9 @@ const ManageCompanyProfilePage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   {/* Company Logo */}
                   <div className="md:col-span-2 flex flex-col items-center">
-                    <div className={`w-32 h-32 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center mb-4`}>
+                    <div className={`w-32 h-32 rounded-full ${
+                      darkMode ? 'bg-gray-700' : 'bg-gray-200'
+                    } flex items-center justify-center mb-4`}>
                       {profile.logo ? (
                         <img src={profile.logo} alt="Company Logo" className="w-full h-full object-contain rounded-full" />
                       ) : (
@@ -253,7 +328,9 @@ const ManageCompanyProfilePage = () => {
                       )}
                     </div>
                     {isEditing && (
-                      <label className={`px-4 py-2 rounded-lg cursor-pointer ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`}>
+                      <label className={`px-4 py-2 rounded-lg cursor-pointer ${
+                        darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'
+                      } text-white`}>
                         Ganti Logo
                         <input
                           type="file"
@@ -279,7 +356,9 @@ const ManageCompanyProfilePage = () => {
 
                   {/* Company Name */}
                   <div>
-                    <label htmlFor="name" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label htmlFor="name" className={`block text-sm font-medium mb-2 ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
                       Nama Perusahaan
                     </label>
                     {isEditing ? (
@@ -290,12 +369,22 @@ const ManageCompanyProfilePage = () => {
                           name="name"
                           value={profile.name}
                           onChange={handleInputChange}
-                          className={`w-full px-3 py-2 rounded-lg border ${errors.name ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${
+                            errors.name ? 'border-red-500' : ''
+                          } ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                         {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
                       </>
                     ) : (
-                      <div className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
+                      <div className={`px-3 py-2 rounded-lg border ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
                         {profile.name}
                       </div>
                     )}
@@ -303,7 +392,9 @@ const ManageCompanyProfilePage = () => {
 
                   {/* Industry */}
                   <div>
-                    <label htmlFor="industry" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label htmlFor="industry" className={`block text-sm font-medium mb-2 ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
                       Bidang Industri
                     </label>
                     {isEditing ? (
@@ -313,7 +404,13 @@ const ManageCompanyProfilePage = () => {
                           name="industry"
                           value={profile.industry}
                           onChange={handleInputChange}
-                          className={`w-full px-3 py-2 rounded-lg border ${errors.industry ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${
+                            errors.industry ? 'border-red-500' : ''
+                          } ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         >
                           <option value="">Pilih bidang industri</option>
                           <option value="Teknologi Informasi">Teknologi Informasi</option>
@@ -323,20 +420,27 @@ const ManageCompanyProfilePage = () => {
                           <option value="Kesehatan">Kesehatan</option>
                           <option value="Pertanian">Pertanian</option>
                           <option value="Transportasi">Transportasi</option>
+                          <option value="Lainnya">Lainnya</option>
                         </select>
                         {errors.industry && <p className="mt-1 text-sm text-red-500">{errors.industry}</p>}
                       </>
                     ) : (
-                      <div className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
-                        {profile.industry}
+                      <div className={`px-3 py-2 rounded-lg border ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
+                        {profile.industry || 'Belum dipilih'}
                       </div>
                     )}
                   </div>
 
                   {/* Location */}
                   <div>
-                    <label htmlFor="location" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Lokasi
+                    <label htmlFor="location" className={`block text-sm font-medium mb-2 ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Alamat Kantor
                     </label>
                     {isEditing ? (
                       <>
@@ -346,20 +450,32 @@ const ManageCompanyProfilePage = () => {
                           name="location"
                           value={profile.location}
                           onChange={handleInputChange}
-                          className={`w-full px-3 py-2 rounded-lg border ${errors.location ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${
+                            errors.location ? 'border-red-500' : ''
+                          } ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                         {errors.location && <p className="mt-1 text-sm text-red-500">{errors.location}</p>}
                       </>
                     ) : (
-                      <div className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
-                        {profile.location}
+                      <div className={`px-3 py-2 rounded-lg border ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
+                        {profile.location || 'Tidak disediakan'}
                       </div>
                     )}
                   </div>
 
                   {/* Contact Email */}
                   <div>
-                    <label htmlFor="contactEmail" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label htmlFor="contactEmail" className={`block text-sm font-medium mb-2 ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
                       Email Kontak
                     </label>
                     {isEditing ? (
@@ -370,12 +486,22 @@ const ManageCompanyProfilePage = () => {
                           name="contactEmail"
                           value={profile.contactEmail}
                           onChange={handleInputChange}
-                          className={`w-full px-3 py-2 rounded-lg border ${errors.contactEmail ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${
+                            errors.contactEmail ? 'border-red-500' : ''
+                          } ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                         {errors.contactEmail && <p className="mt-1 text-sm text-red-500">{errors.contactEmail}</p>}
                       </>
                     ) : (
-                      <div className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
+                      <div className={`px-3 py-2 rounded-lg border ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
                         {profile.contactEmail}
                       </div>
                     )}
@@ -383,7 +509,9 @@ const ManageCompanyProfilePage = () => {
 
                   {/* Contact Phone */}
                   <div>
-                    <label htmlFor="contactPhone" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label htmlFor="contactPhone" className={`block text-sm font-medium mb-2 ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
                       Telepon Kontak
                     </label>
                     {isEditing ? (
@@ -394,20 +522,32 @@ const ManageCompanyProfilePage = () => {
                           name="contactPhone"
                           value={profile.contactPhone}
                           onChange={handleInputChange}
-                          className={`w-full px-3 py-2 rounded-lg border ${errors.contactPhone ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${
+                            errors.contactPhone ? 'border-red-500' : ''
+                          } ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                         {errors.contactPhone && <p className="mt-1 text-sm text-red-500">{errors.contactPhone}</p>}
                       </>
                     ) : (
-                      <div className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
-                        {profile.contactPhone}
+                      <div className={`px-3 py-2 rounded-lg border ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
+                        {profile.contactPhone || 'Tidak disediakan'}
                       </div>
                     )}
                   </div>
 
                   {/* Website */}
                   <div>
-                    <label htmlFor="website" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label htmlFor="website" className={`block text-sm font-medium mb-2 ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
                       Website
                     </label>
                     {isEditing ? (
@@ -418,15 +558,29 @@ const ManageCompanyProfilePage = () => {
                           name="website"
                           value={profile.website}
                           onChange={handleInputChange}
-                          className={`w-full px-3 py-2 rounded-lg border ${errors.website ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${
+                            errors.website ? 'border-red-500' : ''
+                          } ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                         {errors.website && <p className="mt-1 text-sm text-red-500">{errors.website}</p>}
                       </>
                     ) : (
-                      <div className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
-                        <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                          {profile.website}
-                        </a>
+                      <div className={`px-3 py-2 rounded-lg border ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
+                        {profile.website ? (
+                          <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                            {profile.website}
+                          </a>
+                        ) : (
+                          'Tidak disediakan'
+                        )}
                       </div>
                     )}
                   </div>
@@ -434,7 +588,9 @@ const ManageCompanyProfilePage = () => {
 
                 {/* Company Description */}
                 <div className="mb-6">
-                  <label htmlFor="description" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <label htmlFor="description" className={`block text-sm font-medium mb-2 ${
+                    darkMode ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
                     Deskripsi Perusahaan
                   </label>
                   {isEditing ? (
@@ -445,12 +601,22 @@ const ManageCompanyProfilePage = () => {
                         value={profile.description}
                         onChange={handleInputChange}
                         rows={4}
-                        className={`w-full px-3 py-2 rounded-lg border ${errors.description ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                        className={`w-full px-3 py-2 rounded-lg border ${
+                          errors.description ? 'border-red-500' : ''
+                        } ${
+                          darkMode 
+                            ? 'bg-gray-700 border-gray-600 text-white' 
+                            : 'bg-white border-gray-300 text-gray-900'
+                        } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                       />
                       {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
                     </>
                   ) : (
-                    <div className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
+                    <div className={`w-full px-3 py-2 rounded-lg border ${
+                      darkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-gray-50 border-gray-300 text-gray-900'
+                    }`}>
                       {profile.description}
                     </div>
                   )}
@@ -465,13 +631,17 @@ const ManageCompanyProfilePage = () => {
                         setIsEditing(false);
                         setErrors({});
                       }}
-                      className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-300 hover:bg-gray-400'} text-white`}
+                      className={`px-4 py-2 rounded-lg ${
+                        darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-300 hover:bg-gray-400'
+                      } text-white`}
                     >
                       Batal
                     </button>
                     <button
                       type="submit"
-                      className={`px-6 py-2 rounded-lg ${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white`}
+                      className={`px-6 py-2 rounded-lg ${
+                        darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'
+                      } text-white`}
                     >
                       Simpan Perubahan
                     </button>

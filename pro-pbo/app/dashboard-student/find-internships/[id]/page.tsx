@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../../../lib/authContext';
-import { getStudentProfile } from '../../../../lib/apiService';
+import { useAuth } from '../../../lib/authContext';
+import { getStudentProfile } from '../../../lib/apiService';
 import { useParams } from 'next/navigation';
 import Sidebar from '../../../components/Sidebar';
 

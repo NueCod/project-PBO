@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Pesan | InternBridge",
+  title: "Pesan | InternSheep",
   description: "Messages for students",
 };
 

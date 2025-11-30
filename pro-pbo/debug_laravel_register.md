@@ -1,4 +1,4 @@
-# Debugging Error Registrasi InternBridge Laravel + Next.js
+# Debugging Error Registrasi InternSheep Laravel + Next.js
 
 ## Tanggal
 24 November 2025

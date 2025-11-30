@@ -44,7 +44,7 @@ const ManageStudentProfilePage = () => {
     }
   }, [darkMode]);
 
-  const { token } = useAuth();
+  const { user, token, login } = useAuth(); // Get user, token, and login function from context
 
   // Load profile data when component mounts
   useEffect(() => {
@@ -175,33 +175,33 @@ const ManageStudentProfilePage = () => {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    if (!profile.name.trim()) {
+    if (!tempProfile?.name.trim()) {
       newErrors.name = 'Nama wajib diisi';
     }
 
-    if (!profile.email.trim()) {
+    if (!tempProfile?.email.trim()) {
       newErrors.email = 'Email wajib diisi';
-    } else if (!/\S+@\S+\.\S+/.test(profile.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(tempProfile.email)) {
       newErrors.email = 'Format email tidak valid';
     }
 
-    if (!profile.university.trim()) {
+    if (!tempProfile?.university.trim()) {
       newErrors.university = 'Universitas wajib diisi';
     }
 
-    if (!profile.major.trim()) {
+    if (!tempProfile?.major.trim()) {
       newErrors.major = 'Jurusan wajib diisi';
     }
 
-    if (!profile.location.trim()) {
+    if (!tempProfile?.location.trim()) {
       newErrors.location = 'Lokasi wajib diisi';
     }
 
-    if (profile.skills.length === 0) {
+    if (tempProfile?.skills.length === 0) {
       newErrors.skills = 'Setidaknya satu keahlian harus diisi';
     }
 
-    if (profile.interests.length === 0) {
+    if (tempProfile?.interests.length === 0) {
       newErrors.interests = 'Setidaknya satu minat harus diisi';
     }
 
@@ -234,6 +234,19 @@ const ManageStudentProfilePage = () => {
 
         // Tampilkan pesan sukses
         alert('Profil berhasil diperbarui!');
+
+        // Update the auth context user data to reflect changes in the header
+        if (user) {
+          // Update user with student name from profile
+          const updatedUser = {
+            ...user,
+            email: tempProfile.email, // Update with the new email if it was changed
+            // Add any other user fields that should be updated
+          };
+
+          // Update auth context with new user data
+          login(updatedUser, token); // Use login function to update user data in context
+        }
 
         // Perbarui state profil utama dengan data profil terbaru dari server
         setProfile(updatedProfile);
@@ -296,7 +309,13 @@ const ManageStudentProfilePage = () => {
         {/* Sidebar */}
         {(sidebarOpen || window.innerWidth >= 768) && (
           <div className="hidden md:block">
-            <Sidebar darkMode={darkMode} />
+            <Sidebar
+              darkMode={darkMode}
+              userProfile={{
+                name: profile?.name || 'User',
+                email: profile?.email || 'user@example.com'
+              }}
+            />
           </div>
         )}
 
@@ -310,7 +329,13 @@ const ManageStudentProfilePage = () => {
 
         {sidebarOpen && window.innerWidth < 768 && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
-            <Sidebar darkMode={darkMode} />
+            <Sidebar
+              darkMode={darkMode}
+              userProfile={{
+                name: profile?.name || 'User',
+                email: profile?.email || 'user@example.com'
+              }}
+            />
           </div>
         )}
 
@@ -467,7 +492,7 @@ const ManageStudentProfilePage = () => {
                         <select
                           id="university"
                           name="university"
-                          value={profile.university}
+                          value={tempProfile?.university || ''}
                           onChange={handleInputChange}
                           className={`w-full px-3 py-2 rounded-lg border ${errors.university ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         >
@@ -495,7 +520,7 @@ const ManageStudentProfilePage = () => {
                         <select
                           id="major"
                           name="major"
-                          value={profile.major}
+                          value={tempProfile?.major || ''}
                           onChange={handleInputChange}
                           className={`w-full px-3 py-2 rounded-lg border ${errors.major ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         >
@@ -523,7 +548,7 @@ const ManageStudentProfilePage = () => {
                         <select
                           id="location"
                           name="location"
-                          value={profile.location}
+                          value={tempProfile?.location || ''}
                           onChange={handleInputChange}
                           className={`w-full px-3 py-2 rounded-lg border ${errors.location ? 'border-red-500' : ''} ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         >
@@ -551,7 +576,7 @@ const ManageStudentProfilePage = () => {
                         type="url"
                         id="portfolio"
                         name="portfolio"
-                        value={profile.portfolio || ''}
+                        value={tempProfile?.portfolio || ''}
                         onChange={handleInputChange}
                         className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                       />
@@ -600,7 +625,7 @@ const ManageStudentProfilePage = () => {
                         </div>
                         {errors.skills && <p className="mt-1 text-sm text-red-500">{errors.skills}</p>}
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {profile.skills.map((skill, index) => (
+                          {tempProfile?.skills.map((skill, index) => (
                             <span
                               key={index}
                               className={`px-2 py-1 rounded text-sm flex items-center ${darkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-800'}`}
@@ -665,7 +690,7 @@ const ManageStudentProfilePage = () => {
                         </div>
                         {errors.interests && <p className="mt-1 text-sm text-red-500">{errors.interests}</p>}
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {profile.interests.map((interest, index) => (
+                          {tempProfile?.interests.map((interest, index) => (
                             <span
                               key={index}
                               className={`px-2 py-1 rounded text-sm flex items-center ${darkMode ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800'}`}
@@ -699,6 +724,33 @@ const ManageStudentProfilePage = () => {
                   </div>
                 </div>
 
+                {/* Resume */}
+                <div>
+                  <label htmlFor="resume" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Resume
+                  </label>
+                  {isEditing ? (
+                    <input
+                      type="url"
+                      id="resume"
+                      name="resume"
+                      value={tempProfile?.resume || ''}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                  ) : (
+                    <div className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}>
+                      {tempProfile?.resume ? (
+                        <a href={tempProfile.resume} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                          {tempProfile.resume}
+                        </a>
+                      ) : (
+                        'Tidak ada resume'
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Experience */}
                 <div className="mb-6">
                   <label htmlFor="experience" className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -708,13 +760,18 @@ const ManageStudentProfilePage = () => {
                     <textarea
                       id="experience"
                       name="experience"
-                      value={profile.experience.join('\n')}
+                      value={tempProfile?.experience.join('\n') || ''}
                       onChange={(e) => {
                         const experience = e.target.value.split('\n').filter(exp => exp.trim() !== '');
-                        setProfile(prev => ({
-                          ...prev,
-                          experience: experience
-                        }));
+                        setTempProfile(prev => {
+                          if (prev) {
+                            return {
+                              ...prev,
+                              experience: experience
+                            };
+                          }
+                          return prev;
+                        });
                       }}
                       rows={3}
                       className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
@@ -739,13 +796,18 @@ const ManageStudentProfilePage = () => {
                     <textarea
                       id="education"
                       name="education"
-                      value={profile.education.join('\n')}
+                      value={tempProfile?.education.join('\n') || ''}
                       onChange={(e) => {
                         const education = e.target.value.split('\n').filter(edu => edu.trim() !== '');
-                        setProfile(prev => ({
-                          ...prev,
-                          education: education
-                        }));
+                        setTempProfile(prev => {
+                          if (prev) {
+                            return {
+                              ...prev,
+                              education: education
+                            };
+                          }
+                          return prev;
+                        });
                       }}
                       rows={3}
                       className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
