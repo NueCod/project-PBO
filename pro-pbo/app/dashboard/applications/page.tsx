@@ -3,26 +3,46 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
+import { useAuth } from '../../lib/authContext';
+import { setInterviewSchedule, updateApplicationStatus } from '../../services/internshipService';
 
 type ApplicationStatus = 'Applied' | 'Reviewed' | 'Interview' | 'Accepted' | 'Rejected';
 type Application = {
-  id: number;
-  studentName: string;
-  studentEmail: string;
-  studentUniversity: string;
-  studentMajor: string;
-  studentSkills: string[];
-  title: string;
-  company: string;
-  position: string;
-  appliedDate: string;
+  id: string; // Changed to string to match API
+  job_id: string;
+  job_title: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  applied_date: string;
   status: ApplicationStatus;
-  deadline: string;
-  description: string;
-  requirements: string[];
+  feedback_note?: string;
+  location?: string;
+  job_type?: string;
+  description?: string;
+  studentUniversity?: string;
+  studentMajor?: string;
+  studentSkills?: string[];
+  requirements?: string[];
+  cover_letter?: string;
+  portfolio_url?: string;
+  availability?: string;
+  expected_duration?: string;
+  additional_info?: string;
   statusDate: string;
   notes?: string;
   studentBio?: string; // Added for student bio
+  company?: string;
+  position?: string;
+  deadline?: string;
+  interview_date?: string;
+  interview_time?: string;
+  interview_method?: string;
+  interview_location?: string;
+  interview_notes?: string;
+  attendance_confirmed?: boolean;
+  attendance_confirmed_at?: string;
+  attendance_confirmation_method?: string;
 };
 
 const CompanyApplicationsPage = () => {
@@ -31,12 +51,36 @@ const CompanyApplicationsPage = () => {
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | 'All'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showApplicantProfile, setShowApplicantProfile] = useState(false);
   const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<{id: string, status: ApplicationStatus} | null>(null);
+  const [showInterviewScheduleModal, setShowInterviewScheduleModal] = useState(false);
+  const [interviewSchedule, setInterviewSchedule] = useState({
+    date: '',
+    time: '',
+    method: 'online', // 'online' or 'offline'
+    location: '',
+    notes: ''
+  });
+
+  // Ensure interviewSchedule always has proper default values
+  useEffect(() => {
+    setInterviewSchedule(prev => ({
+      date: prev.date ?? '',
+      time: prev.time ?? '',
+      method: prev.method ?? 'online',
+      location: prev.location ?? '',
+      notes: prev.notes ?? ''
+    }));
+  }, []);
+
+  const { token } = useAuth(); // Get the authentication token
 
   useEffect(() => {
     // Check system preference for dark mode
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setDarkMode(true);
     }
   }, []);
@@ -56,123 +100,113 @@ const CompanyApplicationsPage = () => {
 
   // Toggle sidebar on mobile
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
+    if (typeof window !== 'undefined') {
+      const handleResize = () => {
+        if (window.innerWidth < 768) {
+          setSidebarOpen(false);
+        } else {
+          setSidebarOpen(true);
+        }
+      };
+
+      handleResize();
+      window.addEventListener('resize', handleResize);
+
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  // Fetch company applications from API
+  useEffect(() => {
+    const fetchApplications = async () => {
+      // Only proceed if we have a valid token
+      if (!token || token.trim() === '') {
+        console.warn('No authentication token available, skipping fetch');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/company/applications`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+          throw new Error(`Failed to fetch applications: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          // Map the API response to the format expected by the UI
+          const mappedApplications = result.data.map((app: any) => ({
+            id: app.id,
+            job_id: app.job_id,
+            job_title: app.job_title || app.title,
+            student_id: app.student_id,
+            student_name: app.student_name || app.studentName,
+            student_email: app.student_email || app.studentEmail,
+            applied_date: app.applied_date || app.appliedDate,
+            status: app.status || 'Applied',
+            feedback_note: app.feedback_note,
+            location: app.location,
+            job_type: app.job_type,
+            description: app.description,
+            studentUniversity: app.studentUniversity || '',
+            studentMajor: app.studentMajor || '',
+            studentSkills: app.studentSkills || [],
+            requirements: app.requirements || [],
+            cover_letter: app.cover_letter,
+            portfolio_url: app.portfolio_url,
+            availability: app.availability,
+            expected_duration: app.expected_duration,
+            additional_info: app.additional_info,
+            statusDate: app.statusDate || app.updated_at || app.applied_date || app.appliedDate,
+            company: app.company,
+            position: app.position,
+            deadline: app.deadline,
+            interview_date: app.interview_date || null,
+            interview_time: app.interview_time || null,
+            interview_method: app.interview_method || null,
+            interview_location: app.interview_location || null,
+            interview_notes: app.interview_notes || null,
+            attendance_confirmed: app.attendance_confirmed || false,
+            attendance_confirmed_at: app.attendance_confirmed_at || null,
+            attendance_confirmation_method: app.attendance_confirmation_method || null,
+          }));
+
+          setApplications(mappedApplications);
+        } else {
+          console.error('Failed to fetch applications:', result.message || 'Unknown error');
+          setApplications([]);
+        }
+      } catch (error) {
+        console.error('Error fetching company applications:', error);
+        setApplications([]);
+      } finally {
+        setLoading(false);
       }
     };
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Initialize with mock data for company applications
-  useEffect(() => {
-    const mockApplications: Application[] = [
-      {
-        id: 1,
-        studentName: 'Budi Santoso',
-        studentEmail: 'budi.santoso@example.com',
-        studentUniversity: 'Universitas Indonesia',
-        studentMajor: 'Teknik Informatika',
-        studentSkills: ['JavaScript', 'React', 'Node.js', 'UI/UX Design'],
-        title: 'UI/UX Designer Intern',
-        company: 'PT Teknologi Maju',
-        position: 'UI/UX Designer',
-        appliedDate: '2024-10-15',
-        status: 'Accepted',
-        deadline: '2024-11-30',
-        description: 'Looking for a creative UI/UX designer to join our team and help design user-friendly interfaces for our products.',
-        requirements: ['Figma', 'Adobe XD', 'User Research', 'Prototyping'],
-        statusDate: '2024-10-20'
-      },
-      {
-        id: 2,
-        studentName: 'Siti Aminah',
-        studentEmail: 'siti.aminah@example.com',
-        studentUniversity: 'Institut Teknologi Bandung',
-        studentMajor: 'Sistem Informasi',
-        studentSkills: ['Python', 'Django', 'SQL', 'Data Analysis'],
-        title: 'Backend Developer Intern',
-        company: 'PT Digital Solusi',
-        position: 'Backend Developer',
-        appliedDate: '2024-10-18',
-        status: 'Interview',
-        deadline: '2024-11-25',
-        description: 'Join our backend team to develop and maintain server-side applications using modern technologies.',
-        requirements: ['Node.js', 'Python', 'API Development', 'Database Design'],
-        statusDate: '2024-10-22'
-      },
-      {
-        id: 3,
-        studentName: 'Ahmad Fauzi',
-        studentEmail: 'ahmad.fauzi@example.com',
-        studentUniversity: 'Universitas Gadjah Mada',
-        studentMajor: 'Teknik Komputer',
-        studentSkills: ['C++', 'Embedded Systems', 'Hardware Design'],
-        title: 'Marketing Intern',
-        company: 'PT Kreatif Indonesia',
-        position: 'Marketing',
-        appliedDate: '2024-10-22',
-        status: 'Reviewed',
-        deadline: '2024-12-05',
-        description: 'Assist our marketing team in developing campaigns and analyzing market trends.',
-        requirements: ['Social Media', 'Content Creation', 'Marketing Strategy', 'Analytics'],
-        statusDate: '2024-10-22'
-      },
-      {
-        id: 4,
-        studentName: 'Rina Kusuma',
-        studentEmail: 'rina.kusuma@example.com',
-        studentUniversity: 'Universitas Airlangga',
-        studentMajor: 'Manajemen',
-        studentSkills: ['Excel', 'Project Management', 'Marketing', 'Communication'],
-        title: 'Data Analyst Intern',
-        company: 'PT Analitika Cerdas',
-        position: 'Data Analyst',
-        appliedDate: '2024-10-20',
-        status: 'Rejected',
-        deadline: '2024-12-10',
-        description: 'Analyze business data to provide actionable insights and recommendations for decision making.',
-        requirements: ['SQL', 'Python', 'Data Visualization', 'Statistical Analysis'],
-        statusDate: '2024-10-28'
-      },
-      {
-        id: 5,
-        studentName: 'Dian Prasetya',
-        studentEmail: 'dian.prasetya@example.com',
-        studentUniversity: 'Institut Pertanian Bogor',
-        studentMajor: 'Ilmu Komputer',
-        studentSkills: ['React', 'JavaScript', 'CSS', 'Responsive Design'],
-        title: 'Frontend Developer Intern',
-        company: 'PT Web Inovasi',
-        position: 'Frontend Developer',
-        appliedDate: '2024-10-25',
-        status: 'Applied',
-        deadline: '2024-11-20',
-        description: 'Work on the frontend development of our web applications using modern JavaScript frameworks.',
-        requirements: ['React', 'JavaScript', 'CSS', 'Responsive Design'],
-        statusDate: '2024-10-27'
-      }
-    ];
-    setApplications(mockApplications);
-  }, []);
+    fetchApplications();
+  }, [token]); // Dependency on token so it re-fetches when token changes
 
   // Filter applications based on status and search term
   const filteredApplications = applications.filter(app => {
     const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
     const matchesSearch =
-      app.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.studentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.studentUniversity.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.studentMajor.toLowerCase().includes(searchTerm.toLowerCase());
+      (app.student_name || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.student_email || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.position || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.company || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.description || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.studentUniversity || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.studentMajor || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.studentSkills || []).some((skill) => typeof skill === 'string' && skill.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return matchesStatus && matchesSearch;
   });
@@ -195,8 +229,24 @@ const CompanyApplicationsPage = () => {
     }
   };
 
+  // Function to get the display status for UI
+  const getDisplayStatus = (appStatus: ApplicationStatus, hasInterviewScheduled: boolean) => {
+    // If the application has already been accepted/rejected, show the actual status
+    if (appStatus === 'Accepted' || appStatus === 'Rejected') {
+      return appStatus;
+    }
+    // If interview is scheduled and not yet accepted/rejected, show as 'Interview'
+    return hasInterviewScheduled ? 'Interview' : appStatus;
+  };
+
   // Function to get status action text
-  const getStatusAction = (status: ApplicationStatus) => {
+  // Enhanced to consider actual interview scheduling
+  const getStatusAction = (status: ApplicationStatus, hasInterviewScheduled?: boolean) => {
+    // If an interview is scheduled but not yet accepted/rejected, show 'Accept/Reject'
+    if (hasInterviewScheduled && status !== 'Accepted' && status !== 'Rejected') {
+      return 'Accept/Reject';
+    }
+
     switch(status) {
       case 'Applied':
         return 'Review';
@@ -218,11 +268,255 @@ const CompanyApplicationsPage = () => {
     setShowApplicantProfile(true);
   };
 
-  // Function to handle status change
-  const handleStatusChange = (id: number, newStatus: ApplicationStatus) => {
-    setApplications(prev => prev.map(app => 
-      app.id === id ? { ...app, status: newStatus, statusDate: new Date().toISOString().split('T')[0] } : app
-    ));
+  // Function to handle status change with modal
+  // Enhanced to consider if interview is already scheduled
+  const handleStatusChange = (id: string, currentStatus: ApplicationStatus, hasInterviewScheduled?: boolean) => {
+    // If an interview is already scheduled, don't open the review modal for scheduling
+    if (hasInterviewScheduled) {
+      // Do nothing - accept/reject buttons are shown separately for scheduled interviews
+      return;
+    }
+
+    // If current status is 'Applied', we want to move to 'Reviewed'
+    if (currentStatus === 'Applied') {
+      setSelectedApplication({ id, status: currentStatus });
+      setShowReviewModal(true); // Show the review modal
+    }
+    // If current status is 'Reviewed', we want to schedule an interview
+    else if (currentStatus === 'Reviewed') {
+      setSelectedApplication({ id, status: currentStatus });
+      setShowReviewModal(true); // Show the review modal which has interview scheduling
+    }
+    // For 'Interview' status, do nothing as accept/reject buttons are shown separately
+    else if (currentStatus === 'Interview') {
+      // Do nothing - accept/reject functionality is handled separately
+    }
+    // For other statuses, handle as needed
+    else {
+      // For other transitions, keep the direct approach
+      setApplications(prev => prev.map(app =>
+        app.id === id ? { ...app, status: getNextStatus(currentStatus), statusDate: new Date().toISOString().split('T')[0] } : app
+      ));
+    }
+  };
+
+  // Helper function to get next status
+  const getNextStatus = (currentStatus: ApplicationStatus): ApplicationStatus => {
+    if (currentStatus === 'Applied') return 'Reviewed';
+    if (currentStatus === 'Reviewed') return 'Interview';
+    if (currentStatus === 'Interview') return 'Accepted';
+    return 'Applied'; // For 'Accepted' or any other status, cycle back to Applied
+  };
+
+  // Function to handle modal decision
+  const handleReviewDecision = (decision: 'interview' | 'reject') => {
+    if (selectedApplication) {
+      const { id, status } = selectedApplication;
+
+      // If decision is to proceed to interview, show schedule modal
+      if (decision === 'interview') {
+        // Reset interview schedule form to default values before opening modal
+        setInterviewSchedule({
+          date: '',
+          time: '',
+          method: 'online',
+          location: '',
+          notes: ''
+        });
+        setShowReviewModal(false); // Close review modal
+        setShowInterviewScheduleModal(true); // Show interview schedule modal
+      } else {
+        // Update status to Rejected
+        setApplications(prev => prev.map(app =>
+          app.id === id ? { ...app, status: 'Rejected', statusDate: new Date().toISOString().split('T')[0] } : app
+        ));
+
+        // Close the modal
+        setShowReviewModal(false);
+        setSelectedApplication(null);
+      }
+    }
+  };
+
+  // Function to handle interview scheduling via API
+  const handleScheduleInterview = async () => {
+    if (selectedApplication && token) {
+      const { id } = selectedApplication;
+
+      try {
+        const result = await setInterviewSchedule(token, id, {
+          interview_date: interviewSchedule.date,
+          interview_time: interviewSchedule.time,
+          interview_method: interviewSchedule.method,
+          interview_location: interviewSchedule.method === 'offline' ? interviewSchedule.location : null,
+          interview_notes: interviewSchedule.notes,
+        });
+
+        // Create a new array with updated application to force re-render
+        setApplications(prev => {
+          const updatedApplications = prev.map(app =>
+            app.id === id
+              ? {
+                  ...app,
+                  status: 'Interview',
+                  statusDate: new Date().toISOString().split('T')[0],
+                  interview_date: result?.interview_date || interviewSchedule.date,
+                  interview_time: result?.interview_time || interviewSchedule.time,
+                  interview_method: result?.interview_method || interviewSchedule.method,
+                  interview_location: result?.interview_location || (interviewSchedule.method === 'offline' ? interviewSchedule.location : null),
+                  interview_notes: result?.interview_notes || interviewSchedule.notes,
+                }
+              : app
+          );
+
+          // Return a completely new array to force React to detect changes
+          return [...updatedApplications];
+        });
+
+        // Reset schedule form and close modal
+        setInterviewSchedule({
+          date: '',
+          time: '',
+          method: 'online',
+          location: '',
+          notes: ''
+        });
+        setShowInterviewScheduleModal(false);
+        setSelectedApplication(null);
+
+        // After a brief delay, refresh data from server to ensure consistency
+        // This ensures the updated status is correctly reflected after page navigation
+        setTimeout(async () => {
+          // Refresh applications data after interview scheduling
+          if (token) {
+            try {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/company/applications`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                  const mappedApplications = result.data.map((app: any) => ({
+                    id: app.id,
+                    job_id: app.job_id,
+                    job_title: app.job_title || app.title,
+                    student_id: app.student_id,
+                    student_name: app.student_name || app.studentName,
+                    student_email: app.student_email || app.studentEmail,
+                    applied_date: app.applied_date || app.appliedDate,
+                    status: app.status || 'Applied',
+                    feedback_note: app.feedback_note,
+                    location: app.location,
+                    job_type: app.job_type,
+                    description: app.description,
+                    studentUniversity: app.studentUniversity || '',
+                    studentMajor: app.studentMajor || '',
+                    studentSkills: app.studentSkills || [],
+                    requirements: app.requirements || [],
+                    cover_letter: app.cover_letter,
+                    portfolio_url: app.portfolio_url,
+                    availability: app.availability,
+                    expected_duration: app.expected_duration,
+                    additional_info: app.additional_info,
+                    statusDate: app.statusDate || app.updated_at || app.applied_date || app.appliedDate,
+                    company: app.company,
+                    position: app.position,
+                    deadline: app.deadline,
+                    interview_date: app.interview_date || null,
+                    interview_time: app.interview_time || null,
+                    interview_method: app.interview_method || null,
+                    interview_location: app.interview_location || null,
+                    interview_notes: app.interview_notes || null,
+                  }));
+
+                  setApplications(mappedApplications);
+                }
+              }
+            } catch (error) {
+              console.error('Error refreshing applications after scheduling:', error);
+            }
+          }
+        }, 500); // Longer delay to ensure DB transaction completes
+      } catch (error) {
+        console.error('Error scheduling interview:', error);
+        alert('Gagal menjadwalkan wawancara. Silakan coba lagi.');
+      }
+    }
+  };
+
+  // Function to handle accept/reject application after interview
+  const handleAcceptRejectApplication = async (id: string, decision: 'accept' | 'reject') => {
+    const newStatus = decision === 'accept' ? 'Accepted' : 'Rejected';
+
+    if (token) {
+      try {
+        // Update the status on the backend
+        const updatedApplication = await updateApplicationStatus(
+          token,
+          id,
+          newStatus.toLowerCase(),  // Backend expects lowercase status
+          decision === 'reject' ? 'Aplikasi ditolak' : 'Aplikasi diterima'
+        );
+
+        // Update local state to reflect the change
+        setApplications(prev => prev.map(app =>
+          app.id === id ? {
+            ...app,
+            status: newStatus,
+            statusDate: new Date().toISOString().split('T')[0],
+            feedback_note: updatedApplication?.feedback_note || app.feedback_note
+          } : app
+        ));
+
+        // Close modal if open
+        // No need to close modals here since they're handled separately
+      } catch (error) {
+        console.error(`Error ${decision === 'accept' ? 'accepting' : 'rejecting'} application:`, error);
+        alert(`Gagal ${decision === 'accept' ? 'menerima' : 'menolak'} aplikasi. Silakan coba lagi.`);
+
+        // Still update local state as fallback
+        setApplications(prev => prev.map(app =>
+          app.id === id ? {
+            ...app,
+            status: newStatus,
+            statusDate: new Date().toISOString().split('T')[0]
+          } : app
+        ));
+      }
+    } else {
+      // Fallback if no token, just update local state
+      setApplications(prev => prev.map(app =>
+        app.id === id ? {
+          ...app,
+          status: newStatus,
+          statusDate: new Date().toISOString().split('T')[0]
+        } : app
+      ));
+    }
+  };
+
+  // Function to handle schedule change
+  const handleScheduleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setInterviewSchedule(prev => {
+      // Ensure previous state has all required properties
+      const safePrev = {
+        date: prev.date || '',
+        time: prev.time || '',
+        method: prev.method || 'online',
+        location: prev.location || '',
+        notes: prev.notes || ''
+      };
+
+      return {
+        ...safePrev,
+        [name]: value
+      };
+    });
   };
 
   return (
@@ -271,21 +565,21 @@ const CompanyApplicationsPage = () => {
 
       <div className="flex pt-16">
         {/* Sidebar */}
-        {(sidebarOpen || window.innerWidth >= 768) && (
+        {(sidebarOpen || (typeof window !== 'undefined' && window.innerWidth >= 768)) && (
           <div className="hidden md:block">
             <Sidebar darkMode={darkMode} />
           </div>
         )}
 
         {/* Mobile sidebar overlay */}
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
           <div
             className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
             onClick={() => setSidebarOpen(false)}
           ></div>
         )}
 
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
             <Sidebar darkMode={darkMode} />
           </div>
@@ -363,36 +657,47 @@ const CompanyApplicationsPage = () => {
             {/* Results Count */}
             <div className="mb-4">
               <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Menemukan <span className="font-semibold">{filteredApplications.length}</span> lamaran masuk
+                Menemukan <span className="font-semibold">{loading ? '...' : filteredApplications.length}</span> lamaran masuk
               </p>
             </div>
 
             {/* Applications List */}
             <div className="space-y-4">
-              {filteredApplications.length > 0 ? (
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f59e0b]"></div>
+                </div>
+              ) : filteredApplications.length > 0 ? (
                 filteredApplications.map(app => (
                   <div
                     key={app.id}
                     className={`rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'} border-l-4 ${
-                      app.status === 'Applied' ? 'border-blue-500' :
-                      app.status === 'Reviewed' ? 'border-yellow-500' :
-                      app.status === 'Interview' ? 'border-purple-500' :
-                      app.status === 'Accepted' ? 'border-green-500' : 'border-red-500'
+                      getDisplayStatus(app.status, !!app.interview_date) === 'Applied' ? 'border-blue-500' :
+                      getDisplayStatus(app.status, !!app.interview_date) === 'Reviewed' ? 'border-yellow-500' :
+                      getDisplayStatus(app.status, !!app.interview_date) === 'Interview' ? 'border-purple-500' :
+                      getDisplayStatus(app.status, !!app.interview_date) === 'Accepted' ? 'border-green-500' : 'border-red-500'
                     }`}
                   >
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between">
                       <div className="flex-1">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2">
                           <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{app.title}</h3>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium mt-1 md:mt-0 ${getStatusColor(app.status)}`}>
-                            {app.status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium mt-1 md:mt-0 ${getStatusColor(getDisplayStatus(app.status, !!app.interview_date))}`}>
+                              {getDisplayStatus(app.status, !!app.interview_date)}
+                            </span>
+                            {app.attendance_confirmed && (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-green-800 text-green-200' : 'bg-green-200 text-green-800'}`}>
+                                Hadir
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                           <div>
                             <p className={`font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {app.studentName} • {app.studentEmail}
+                              {app.student_name} • {app.student_email}
                             </p>
                             <p className={`text-sm mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                               {app.studentUniversity} • {app.studentMajor}
@@ -411,9 +716,14 @@ const CompanyApplicationsPage = () => {
                                     : `${darkMode ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'} border`
                           }`}>
                             <p className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              <span className="font-medium">Dilamar:</span> {app.appliedDate} • 
+                              <span className="font-medium">Dilamar:</span> {app.appliedDate} •
                               <span className="font-medium"> Status:</span> {app.statusDate}
                             </p>
+                            {app.attendance_confirmed && (
+                              <p className={`mt-1 ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
+                                <span className="font-medium">Kehadiran:</span> Dikonfirmasi
+                              </p>
+                            )}
                           </div>
                         </div>
 
@@ -466,24 +776,44 @@ const CompanyApplicationsPage = () => {
 
                       <div className="ml-0 md:ml-4 mt-4 md:mt-0 flex flex-col space-y-2">
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => handleStatusChange(app.id, app.status === 'Applied' ? 'Reviewed' : 
-                                app.status === 'Reviewed' ? 'Interview' : 
-                                app.status === 'Interview' ? 'Accepted' : 'Applied')}
-                            className={`px-4 py-2 rounded-lg text-sm ${
-                              app.status === 'Applied' 
-                                ? `${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`
-                                : app.status === 'Reviewed'
-                                  ? `${darkMode ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-yellow-500 hover:bg-yellow-600'} text-white`
-                                  : app.status === 'Interview'
-                                    ? `${darkMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-500 hover:bg-purple-600'} text-white`
+                          {/* Show main action button only when interview is not scheduled or when application has been accepted/rejected */}
+                          {!(app.status === 'Interview' || (!!app.interview_date && app.status !== 'Accepted' && app.status !== 'Rejected')) && (
+                            <button
+                              onClick={() => handleStatusChange(app.id, app.status, false)}
+                              className={`px-4 py-2 rounded-lg text-sm ${
+                                app.status === 'Applied'
+                                  ? `${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`
+                                  : app.status === 'Reviewed'
+                                    ? `${darkMode ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-yellow-500 hover:bg-yellow-600'} text-white`
                                     : app.status === 'Accepted'
                                       ? `${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white`
-                                      : `${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-500 hover:bg-gray-600'} text-white`
-                            }`}
-                          >
-                            {getStatusAction(app.status)}
-                          </button>
+                                      : app.status === 'Rejected'
+                                        ? `${darkMode ? 'bg-red-600 hover:bg-red-700' : 'bg-red-500 hover:bg-red-600'} text-white`
+                                        : `${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-500 hover:bg-gray-600'} text-white`
+                              }`}
+                            >
+                              {getStatusAction(app.status)}
+                            </button>
+                          )}
+
+                          {/* Show Accept/Reject buttons when status is Interview or when interview is scheduled but NOT yet accepted/rejected */}
+                          {(app.status === 'Interview' || (!!app.interview_date && app.status !== 'Accepted' && app.status !== 'Rejected')) && (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => handleAcceptRejectApplication(app.id, 'accept')}
+                                className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                              >
+                                Terima
+                              </button>
+                              <button
+                                onClick={() => handleAcceptRejectApplication(app.id, 'reject')}
+                                className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}
+                              >
+                                Tolak
+                              </button>
+                            </div>
+                          )}
+
                           <button
                             onClick={() => handleViewProfile(app)}
                             className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
@@ -491,9 +821,6 @@ const CompanyApplicationsPage = () => {
                             Profil
                           </button>
                         </div>
-                        <button className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                          Download CV
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -533,10 +860,10 @@ const CompanyApplicationsPage = () => {
                         <div className="flex flex-col items-center">
                           <div className={`w-20 h-20 rounded-full ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} flex items-center justify-center mb-3`}>
                             <span className={`text-2xl font-bold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {selectedApplicant.studentName.charAt(0)}
+                              {selectedApplicant.student_name.charAt(0)}
                             </span>
                           </div>
-                          <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{selectedApplicant.studentName}</h3>
+                          <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{selectedApplicant.student_name}</h3>
                           <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedApplicant.studentMajor}</p>
                           <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedApplicant.studentUniversity}</p>
                         </div>
@@ -563,10 +890,26 @@ const CompanyApplicationsPage = () => {
                         </div>
                       </div>
 
+                      {/* Interview Attendance Confirmation Info */}
+                      {selectedApplicant.attendance_confirmed && (
+                        <div className={`mt-4 p-3 rounded-lg ${darkMode ? 'bg-green-900/30 border border-green-800' : 'bg-green-100 border border-green-200'}`}>
+                          <h4 className={`font-semibold mb-2 ${darkMode ? 'text-green-400' : 'text-green-700'}`}>Konfirmasi Kehadiran Wawancara</h4>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
+                            Status: <span className="font-semibold">Sudah Dikonfirmasi Hadir</span>
+                          </p>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
+                            Tanggal Konfirmasi: {selectedApplicant.attendance_confirmed_at ? new Date(selectedApplicant.attendance_confirmed_at).toLocaleString('id-ID') : 'Tidak diketahui'}
+                          </p>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
+                            Metode: {selectedApplicant.attendance_confirmation_method || 'Sistem'}
+                          </p>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <h4 className={`font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Email</h4>
-                          <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedApplicant.studentEmail}</p>
+                          <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedApplicant.student_email}</p>
                         </div>
                         <div>
                           <h4 className={`font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Posisi Dilamar</h4>
@@ -590,6 +933,294 @@ const CompanyApplicationsPage = () => {
           </div>
         </main>
       </div>
+
+      {/* Interview Schedule Modal */}
+      {showInterviewScheduleModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl p-6 shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Jadwal Wawancara</h2>
+              <button
+                onClick={() => {
+                  setShowInterviewScheduleModal(false);
+                  setSelectedApplication(null);
+                  setInterviewSchedule({
+                    date: '',
+                    time: '',
+                    method: 'online',
+                    location: '',
+                    notes: ''
+                  });
+                }}
+                className={`p-2 rounded-full ${darkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-200'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {selectedApplication && (
+              <>
+                {(() => {
+                  const app = applications.find(a => a.id === selectedApplication.id);
+                  return app ? (
+                    <div className="space-y-6">
+                      <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                        <div className="flex flex-wrap justify-between items-start gap-4">
+                          <div>
+                            <h3 className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>{app.student_name}</h3>
+                            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{app.position}</p>
+                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{app.student_email}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interview Attendance Confirmation Info */}
+                      {app.attendance_confirmed && (
+                        <div className={`p-4 rounded-lg ${darkMode ? 'bg-green-900/30 border border-green-800' : 'bg-green-100 border border-green-200'}`}>
+                          <h4 className={`font-semibold mb-2 ${darkMode ? 'text-green-400' : 'text-green-700'}`}>Konfirmasi Kehadiran Wawancara</h4>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
+                            Status: <span className="font-semibold">Sudah Dikonfirmasi Hadir</span>
+                          </p>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
+                            Tanggal Konfirmasi: {app.attendance_confirmed_at ? new Date(app.attendance_confirmed_at).toLocaleString('id-ID') : 'Tidak diketahui'}
+                          </p>
+                          <p className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-700'}`}>
+                            Metode: {app.attendance_confirmation_method || 'Sistem'}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tanggal Wawancara</label>
+                          <input
+                            type="date"
+                            name="date"
+                            value={interviewSchedule.date}
+                            onChange={handleScheduleChange}
+                            className={`w-full px-4 py-2 rounded-lg border ${
+                              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Waktu Wawancara</label>
+                          <input
+                            type="time"
+                            name="time"
+                            value={interviewSchedule.time}
+                            onChange={handleScheduleChange}
+                            className={`w-full px-4 py-2 rounded-lg border ${
+                              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Metode Wawancara</label>
+                          <select
+                            name="method"
+                            value={interviewSchedule.method}
+                            onChange={handleScheduleChange}
+                            className={`w-full px-4 py-2 rounded-lg border ${
+                              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          >
+                            <option value="online">Online (Video Conference)</option>
+                            <option value="offline">Offline (Datang ke Kantor)</option>
+                          </select>
+                        </div>
+
+                        {interviewSchedule.method === 'offline' && (
+                          <div>
+                            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Lokasi Wawancara</label>
+                            <input
+                              type="text"
+                              name="location"
+                              value={interviewSchedule.location}
+                              onChange={handleScheduleChange}
+                              placeholder="Alamat lengkap kantor"
+                              className={`w-full px-4 py-2 rounded-lg border ${
+                                darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Catatan Tambahan</label>
+                        <textarea
+                          name="notes"
+                          value={interviewSchedule.notes}
+                          onChange={handleScheduleChange}
+                          placeholder="Catatan tambahan untuk pelamar..."
+                          rows={3}
+                          className={`w-full px-4 py-2 rounded-lg border ${
+                            darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                          } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                        ></textarea>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-4">
+                        <button
+                          onClick={() => {
+                            setShowInterviewScheduleModal(false);
+                            setSelectedApplication(null);
+                            setInterviewSchedule({
+                              date: '',
+                              time: '',
+                              method: 'online',
+                              location: '',
+                              notes: ''
+                            });
+                          }}
+                          className={`px-4 py-2 rounded-lg font-medium ${
+                            darkMode ? 'bg-gray-600 hover:bg-gray-700 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                          }`}
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={handleScheduleInterview}
+                          disabled={!interviewSchedule.date || !interviewSchedule.time}
+                          className={`px-4 py-2 rounded-lg font-medium ${
+                            (!interviewSchedule.date || !interviewSchedule.time)
+                              ? `${darkMode ? 'bg-gray-700 cursor-not-allowed' : 'bg-gray-300 cursor-not-allowed'} text-gray-500`
+                              : `${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`
+                          }`}
+                        >
+                          Jadwalkan Wawancara
+                        </button>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl p-6 shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Review Lamaran</h2>
+              <button
+                onClick={() => {
+                  setShowReviewModal(false);
+                  setSelectedApplication(null);
+                }}
+                className={`p-2 rounded-full ${darkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-200'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {selectedApplication && (
+              <>
+                {(() => {
+                  const app = applications.find(a => a.id === selectedApplication.id);
+                  return app ? (
+                    <div className="space-y-6">
+                      <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                        <div className="flex flex-wrap justify-between items-start gap-4">
+                          <div>
+                            <h3 className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>{app.student_name}</h3>
+                            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{app.position}</p>
+                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{app.student_email}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`}>
+                              Download CV
+                            </button>
+                            {app.portfolio_url && (
+                              <a
+                                href={app.portfolio_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-yellow-500 hover:bg-yellow-600'} text-white`}
+                              >
+                                Portofolio
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {app.cover_letter && (
+                        <div>
+                          <h4 className={`font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Surat Lamaran</h4>
+                          <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{app.cover_letter}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {app.additional_info && (
+                        <div>
+                          <h4 className={`font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Catatan Tambahan</h4>
+                          <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{app.additional_info}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <h4 className={`font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Keahlian</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {app.studentSkills?.map((skill, index) => (
+                            <span
+                              key={index}
+                              className={`px-3 py-1 rounded-full text-sm ${darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-800'}`}
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-4">
+                        <p className={`mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          Apakah kandidat ini akan dilanjutkan ke tahap wawancara atau tidak?
+                        </p>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <button
+                            onClick={() => handleReviewDecision('interview')}
+                            className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                              darkMode ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white'
+                            }`}
+                          >
+                            Lanjut ke Wawancara
+                          </button>
+                          <button
+                            onClick={() => handleReviewDecision('reject')}
+                            className={`flex-1 px-4 py-2 rounded-lg font-medium ${
+                              darkMode ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                            }`}
+                          >
+                            Tidak Lanjut
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

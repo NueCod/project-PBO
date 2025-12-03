@@ -39,8 +39,10 @@ const FindInternshipsPageClient = () => {
   const [semesterFilter, setSemesterFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedInternship, setSelectedInternship] = useState<Internship | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
-  const { token } = useAuth();
+  const { user, token } = useAuth();
 
   useEffect(() => {
     // Check system preference for dark mode
@@ -135,17 +137,53 @@ const FindInternshipsPageClient = () => {
       if (token) {
         try {
           const profile = await getStudentProfile(token);
-          setUserName(profile.name || profile.email.split('@')[0]); // Gunakan nama dari profil, atau username dari email jika tidak ada
-          setUserEmail(profile.email);
-          setUserInitial(profile.name?.charAt(0).toUpperCase() || profile.email.charAt(0).toUpperCase());
+          // Hanya atur nama jika profil berhasil didapatkan (bukan null)
+          if (profile) {
+            setUserName(profile.name || profile.email?.split('@')[0] || 'User'); // Gunakan nama dari profil, atau username dari email jika tidak ada
+            setUserEmail(profile.email || '');
+            setUserInitial(profile.name?.charAt(0).toUpperCase() || profile.email?.charAt(0).toUpperCase() || 'U');
+          } else {
+            // Jika profil tidak didapatkan (mungkin karena bukan student), kita bisa coba mendapatkan info dari auth context
+            if (user) {
+              setUserName(user.email.split('@')[0] || 'User');
+              setUserEmail(user.email);
+              setUserInitial(user.email.charAt(0).toUpperCase() || 'U');
+            } else {
+              setUserName('User');
+              setUserEmail('');
+              setUserInitial('U');
+            }
+          }
         } catch (error) {
           console.error('Error fetching user profile:', error);
+          // Jika terjadi error, coba set info default berdasarkan user dari auth context
+          if (user) {
+            setUserName(user.email.split('@')[0] || 'User');
+            setUserEmail(user.email);
+            setUserInitial(user.email.charAt(0).toUpperCase() || 'U');
+          } else {
+            setUserName('User');
+            setUserEmail('');
+            setUserInitial('U');
+          }
         }
       }
     };
 
     fetchUserProfile();
-  }, [token]);
+  }, [token, user]);
+
+  // Function to handle view detail button click
+  const handleViewDetail = (internship: Internship) => {
+    setSelectedInternship(internship);
+    setShowModal(true);
+  };
+
+  // Function to close modal
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedInternship(null);
+  };
 
   // Filter internships based on search and filters
   const filteredInternships = (internshipsList || []).filter(internship => {
@@ -190,8 +228,6 @@ const FindInternshipsPageClient = () => {
 
     return matchesSearch && matchesLocation && matchesType && matchesSkills && matchesMajor && matchesSemester && matchesStatus;
   });
-
-  const { user } = useAuth();
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
@@ -506,7 +542,10 @@ const FindInternshipsPageClient = () => {
                             Lamar
                           </button>
                         </a>
-                        <button className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} transition-colors`}>
+                        <button
+                          onClick={() => handleViewDetail(internship)}
+                          className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'} transition-colors`}
+                        >
                           Detail
                         </button>
                       </div>
@@ -539,6 +578,158 @@ const FindInternshipsPageClient = () => {
                 </div>
               ) : null}
             </div>
+
+            {/* Modal for internship details */}
+            {showModal && selectedInternship && (
+              <div className="fixed inset-0 backdrop-blur-sm bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className={`rounded-xl p-6 shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                  <div className="flex justify-between items-start mb-4">
+                    <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {selectedInternship.title}
+                    </h2>
+                    <button
+                      onClick={closeModal}
+                      className={`text-gray-500 hover:text-gray-700 ${darkMode ? 'text-gray-400 hover:text-gray-300' : ''}`}
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Perusahaan</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedInternship.company}</p>
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Lokasi</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{selectedInternship.location}</p>
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tipe</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {selectedInternship.type === 'wfo' ? 'WFO (Work From Office)' :
+                           selectedInternship.type === 'wfh' ? 'WFH (Work From Home)' :
+                           'Hybrid'}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Durasi</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {selectedInternship.duration}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status Pembayaran</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {selectedInternship.paid === 'paid' ? 'Berbayar' : 'Tidak Berbayar'}
+                        </p>
+                      </div>
+                      {selectedInternship.salary && (
+                        <div>
+                          <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Gaji</h3>
+                          <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {selectedInternship.salary}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Batas Akhir</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {selectedInternship.deadline}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Diposting</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {selectedInternship.posted}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Minimal Semester</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Smt {selectedInternship.minSemester}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status</h3>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {selectedInternship.status}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Deskripsi</h3>
+                      <p className={`mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {selectedInternship.description}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Jurusan yang Dicari</h3>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {(selectedInternship.requirements || []).slice(0, 5).map((req, index) => (
+                            <span
+                              key={index}
+                              className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}
+                            >
+                              {req}
+                            </span>
+                          ))}
+                          {selectedInternship.requirements && selectedInternship.requirements.length > 5 && (
+                            <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                              +{selectedInternship.requirements.length - 5} lainnya
+                            </span>
+                          )}
+                          {(!selectedInternship.requirements || selectedInternship.requirements.length === 0) && (
+                            <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                              Tidak ada spesifikasi
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Keterampilan yang Dicari</h3>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {(selectedInternship.tags || []).slice(0, 5).map((tag, index) => (
+                            <span
+                              key={index}
+                              className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {selectedInternship.tags && selectedInternship.tags.length > 5 && (
+                            <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                              +{selectedInternship.tags.length - 5} lainnya
+                            </span>
+                          )}
+                          {(!selectedInternship.tags || selectedInternship.tags.length === 0) && (
+                            <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                              Tidak ada spesifikasi
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex justify-end">
+                    <a
+                      href={`/dashboard-student/find-internships/${selectedInternship.id}`}
+                      className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
+                    >
+                      Lamar Sekarang
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

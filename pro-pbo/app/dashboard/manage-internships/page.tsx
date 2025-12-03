@@ -117,27 +117,48 @@ const ManageInternshipsPage = () => {
 
   // Fetch internships posted by this company
   useEffect(() => {
+    console.log('useEffect running - token:', token, 'loading:', loading); // Debug log awal
+    let isMounted = true; // Flag to prevent state updates if component unmounts
+    let isFetching = false; // Flag to prevent multiple simultaneous requests
+
     const fetchInternships = async () => {
-      if (token) {
+      console.log('Before fetch condition - token:', token, 'isMounted:', isMounted, 'isFetching:', isFetching); // Debug log kondisi
+
+      // Prevent multiple simultaneous requests
+      if (token && isMounted && !isFetching) {
+        isFetching = true; // Set flag to prevent another fetch
+        let timeoutId: NodeJS.Timeout;
         try {
-          console.log('Fetching company internships...'); // Debug log
+          console.log('Fetching company internships with token:', token); // Debug log
           setLoading(true);
-          const data = await getCompanyInternships(token);
+
+          // Set timeout to prevent hanging requests
+          const timeoutPromise = new Promise<null>((_, reject) => {
+            timeoutId = setTimeout(() => {
+              reject(new Error('Request timeout'));
+            }, 10000); // 10 second timeout
+          });
+
+          const responsePromise = getCompanyInternships(token);
+
+          // Race between the API call and timeout
+          const data = await Promise.race([responsePromise, timeoutPromise]);
+
           console.log('Company internships fetched:', data); // Debug log
 
           // Process real data from API
           console.log('Raw data from API:', data); // Debug log
 
-          if (data && data.length === 0) {
+          if (isMounted && data && data.length === 0) {
             console.log('No internships found');
             setInternships([]);
-          } else {
+          } else if (isMounted) {
             // Process real data
             const processedData = data.map(internship => {
               console.log('Processing real internship:', {
                 id: internship.id,
                 title: internship.title,
-                type: typeof internship.id,
+                type: internship.type,
                 status: internship.status,
                 is_active: internship.is_active,
                 isMock: false
@@ -156,30 +177,48 @@ const ManageInternshipsPage = () => {
         } catch (error: any) {
           console.error('Error fetching company internships:', error);
 
+          // Clear timeout to prevent memory leaks
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+
           // Check if the error is specifically about job not found
-          if (error.message && error.message.includes('Job not found')) {
+          if (isMounted && error.message && error.message.includes('Job not found')) {
             console.log('No jobs found for this company, initializing empty list');
             setInternships([]);
-          } else if (error.message && error.message.includes('404')) {
+          } else if (isMounted && error.message && error.message.includes('404')) {
             // Handle 404 error specifically - this might mean company profile doesn't exist
             console.log('Company profile may not exist, showing empty list');
             setInternships([]);
             // Optionally show a message to the user about creating company profile
             console.warn('You may need to create or update your company profile first');
-          } else {
+          } else if (isMounted) {
             // For other errors, show empty list
             setInternships([]);
           }
 
           // Don't hide loading until we have proper handling
         } finally {
-          setLoading(false);
+          if (isMounted) {
+            setLoading(false);
+          }
+          // Reset fetching flag
+          isFetching = false;
+          // Clear timeout to prevent memory leaks
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         }
       }
     };
 
     fetchInternships();
-  }, [token]);
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [token]); // Hanya token sebagai dependency agar tidak infinite loop
 
   const handleCloseJob = async (id: string) => {
     // All data now is real data (no mock data), so we can proceed directly
@@ -526,11 +565,25 @@ const ManageInternshipsPage = () => {
                     <button
                       onClick={() => {
                         const fetchInternships = async () => {
-                          if (token) {
+                          // Don't fetch if loading to avoid multiple requests
+                          if (token && !loading) {
+                            let timeoutId: NodeJS.Timeout;
                             try {
                               console.log('Refreshing company internships...'); // Debug log
                               setLoading(true);
-                              const data = await getCompanyInternships(token);
+
+                              // Set timeout to prevent hanging requests
+                              const timeoutPromise = new Promise<null>((_, reject) => {
+                                timeoutId = setTimeout(() => {
+                                  reject(new Error('Request timeout'));
+                                }, 10000); // 10 second timeout
+                              });
+
+                              const responsePromise = getCompanyInternships(token);
+
+                              // Race between the API call and timeout
+                              const data = await Promise.race([responsePromise, timeoutPromise]);
+
                               console.log('Refreshed company internships:', data); // Debug log
                               // Process real data
                               const processedData = data.map(internship => {
@@ -550,6 +603,11 @@ const ManageInternshipsPage = () => {
                             } catch (error: any) {
                               console.error('Error fetching company internships:', error);
 
+                              // Clear timeout to prevent memory leaks
+                              if (timeoutId) {
+                                clearTimeout(timeoutId);
+                              }
+
                               // Handle the same error types as in the main fetch
                               if (error.message && error.message.includes('Job not found')) {
                                 console.log('No jobs found for this company during refresh');
@@ -563,6 +621,10 @@ const ManageInternshipsPage = () => {
                               }
                             } finally {
                               setLoading(false);
+                              // Clear timeout to prevent memory leaks
+                              if (timeoutId) {
+                                clearTimeout(timeoutId);
+                              }
                             }
                           }
                         };

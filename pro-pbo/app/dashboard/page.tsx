@@ -21,6 +21,7 @@ type Activity = {
 
 const DashboardPage = () => {
   const [darkMode, setDarkMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true); // Move this to the top with other state declarations
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
@@ -92,7 +93,6 @@ const DashboardPage = () => {
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
   };
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const stats: StatCard[] = [
     { title: 'Total Magang', value: '12', change: '+2 bulan ini', icon: '💼' },

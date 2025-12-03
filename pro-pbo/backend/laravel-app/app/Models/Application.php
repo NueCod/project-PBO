@@ -20,6 +20,19 @@ class Application extends Model
         'resume_id', // Bisa null
         'status', // applied, reviewing, interview, accepted, rejected
         'feedback_note',
+        'cover_letter',
+        'portfolio_url',
+        'availability',
+        'expected_duration',
+        'additional_info',
+        'interview_date',
+        'interview_time',
+        'interview_method',
+        'interview_location',
+        'interview_notes',
+        'attendance_confirmed',
+        'attendance_confirmed_at',
+        'attendance_confirmation_method',
     ];
 
     // --- Relasi ---

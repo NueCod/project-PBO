@@ -667,11 +667,15 @@ const CreateInternshipPage = () => {
                       return;
                     }
 
+                    console.log('Creating internship with token:', token); // Debug log
+
                     // Check if company has profile before creating job
                     // This is a workaround to ensure company profile exists
                     try {
+                      console.log('Checking company profile before creation...'); // Debug log
                       // Try to fetch company internships to trigger profile creation if needed
-                      await getCompanyInternships(token);
+                      const existingJobs = await getCompanyInternships(token);
+                      console.log('Existing company jobs before creation:', existingJobs);
                     } catch (profileCheckError) {
                       console.warn('Profile check failed, but continuing with job creation:', profileCheckError);
                     }
@@ -699,13 +703,15 @@ const CreateInternshipPage = () => {
 
                     // Create the internship using the service
                     const result = await createInternship(token, internshipData);
-                    console.log('API response:', result); // Debug log
+                    console.log('API response after creation:', result); // Debug log
 
                     // After successful creation, try to refresh the company's job list
                     // to make sure the new job appears in both dashboard and manage page
                     try {
+                      console.log('Refreshing company jobs after creation...'); // Debug log
                       const updatedJobs = await getCompanyInternships(token);
                       console.log('Updated company jobs after creation:', updatedJobs);
+                      console.log('Number of jobs after creation:', updatedJobs.length); // Debug log
                     } catch (refreshError) {
                       console.error('Error refreshing company jobs after creation:', refreshError);
                     }

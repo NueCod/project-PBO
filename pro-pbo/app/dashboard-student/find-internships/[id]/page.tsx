@@ -5,20 +5,28 @@ import { useAuth } from '../../../lib/authContext';
 import { getStudentProfile } from '../../../lib/apiService';
 import { useParams } from 'next/navigation';
 import Sidebar from '../../../components/Sidebar';
+import { getInternshipById, submitApplication } from '../../../services/internshipService'; // Import the service functions
 
 type InternshipApplication = {
-  id: number;
+  id: string; // Changed from number to string to match API
   title: string;
   company: string;
   location: string;
-  type: 'On-site' | 'Remote' | 'Hybrid';
+  type: 'wfo' | 'wfh' | 'hybrid'; // Updated to match backend values
   duration: string;
   posted: string;
   deadline: string;
   description: string;
-  requirements: string[];
+  requirements: string[]; // Array of requirements
   status: 'Open' | 'Closed' | 'Filled';
-  tags: string[];
+  tags: string[]; // Array of tags/skills
+  paid: 'paid' | 'unpaid';
+  minSemester: number;
+  salary?: string;
+  isPaid: boolean;
+  salaryAmount?: string;
+  applications_count?: number;
+  is_active?: boolean;
 };
 
 type Document = {
@@ -59,9 +67,9 @@ const ApplicationFormPage = () => {
       if (token) {
         try {
           const profile = await getStudentProfile(token);
-          setUserName(profile.name || profile.email.split('@')[0]); // Gunakan nama dari profil, atau username dari email jika tidak ada
-          setUserEmail(profile.email);
-          setUserInitial(profile.name?.charAt(0).toUpperCase() || profile.email.charAt(0).toUpperCase());
+          setUserName(profile.name || profile.email?.split('@')[0] || 'User'); // Gunakan nama dari profil, atau username dari email jika tidak ada
+          setUserEmail(profile.email || '');
+          setUserInitial(profile.name?.charAt(0).toUpperCase() || profile.email?.charAt(0).toUpperCase() || 'U');
         } catch (error) {
           console.error('Error fetching user profile:', error);
         }
@@ -70,7 +78,9 @@ const ApplicationFormPage = () => {
 
     fetchUserProfile();
   }, [token]);
+
   const [internship, setInternship] = useState<InternshipApplication | null>(null);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<ApplicationFormData>({
     coverLetter: '',
     portfolioUrl: '',
@@ -87,7 +97,7 @@ const ApplicationFormPage = () => {
 
   useEffect(() => {
     // Check system preference for dark mode
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setDarkMode(true);
     }
   }, []);
@@ -107,103 +117,47 @@ const ApplicationFormPage = () => {
 
   // Toggle sidebar on mobile
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
-    };
+    if (typeof window !== 'undefined') {
+      const handleResize = () => {
+        if (window.innerWidth < 768) {
+          setSidebarOpen(false);
+        } else {
+          setSidebarOpen(true);
+        }
+      };
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
+      // Check initial size
+      handleResize();
 
-    return () => window.removeEventListener('resize', handleResize);
+      // Add event listener
+      window.addEventListener('resize', handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener('resize', handleResize);
+    }
   }, []);
 
-  // Fetch internship and student documents data
+  // Fetch internship data from API
   useEffect(() => {
-    if (params?.id) {
-      // In a real application, this would fetch from an API
-      const mockInternships: InternshipApplication[] = [
-        {
-          id: 1,
-          title: 'UI/UX Designer',
-          company: 'PT Teknologi Maju',
-          location: 'Jakarta',
-          type: 'Hybrid',
-          duration: '6 months',
-          posted: '2024-10-15',
-          deadline: '2024-11-30',
-          description: 'Looking for a creative UI/UX designer to join our team and help design user-friendly interfaces for our products.',
-          requirements: ['Figma', 'Adobe XD', 'User Research', 'Prototyping'],
-          status: 'Open',
-          tags: ['Design', 'Technology']
-        },
-        {
-          id: 2,
-          title: 'Backend Developer',
-          company: 'PT Digital Solusi',
-          location: 'Bandung',
-          type: 'On-site',
-          duration: '4 months',
-          posted: '2024-10-18',
-          deadline: '2024-11-25',
-          description: 'Join our backend team to develop and maintain server-side applications using modern technologies.',
-          requirements: ['Node.js', 'Python', 'API Development', 'Database Design'],
-          status: 'Open',
-          tags: ['Technology', 'Engineering']
-        },
-        {
-          id: 3,
-          title: 'Marketing Intern',
-          company: 'PT Kreatif Indonesia',
-          location: 'Surabaya',
-          type: 'On-site',
-          duration: '3 months',
-          posted: '2024-10-22',
-          deadline: '2024-12-05',
-          description: 'Assist our marketing team in developing campaigns and analyzing market trends.',
-          requirements: ['Social Media', 'Content Creation', 'Marketing Strategy', 'Analytics'],
-          status: 'Open',
-          tags: ['Marketing', 'Business']
-        },
-        {
-          id: 4,
-          title: 'Data Analyst',
-          company: 'PT Analitika Cerdas',
-          location: 'Remote',
-          type: 'Remote',
-          duration: '6 months',
-          posted: '2024-10-20',
-          deadline: '2024-12-10',
-          description: 'Analyze business data to provide actionable insights and recommendations for decision making.',
-          requirements: ['SQL', 'Python', 'Data Visualization', 'Statistical Analysis'],
-          status: 'Open',
-          tags: ['Data', 'Analytics']
-        },
-        {
-          id: 5,
-          title: 'Frontend Developer',
-          company: 'PT Web Inovasi',
-          location: 'Yogyakarta',
-          type: 'Hybrid',
-          duration: '5 months',
-          posted: '2024-10-25',
-          deadline: '2024-11-20',
-          description: 'Work on the frontend development of our web applications using modern JavaScript frameworks.',
-          requirements: ['React', 'JavaScript', 'CSS', 'Responsive Design'],
-          status: 'Closed',
-          tags: ['Technology', 'Web Development']
-        }
-      ];
+    const fetchInternship = async () => {
+      if (params?.id && token) {
+        try {
+          setLoading(true);
+          const internshipId = Array.isArray(params.id) ? params.id[0] : params.id;
+          const internshipData = await getInternshipById(internshipId);
 
-      const internshipId = parseInt(Array.isArray(params.id) ? params.id[0] : params.id);
-      const foundInternship = mockInternships.find(intern => intern.id === internshipId);
-      if (foundInternship) {
-        setInternship(foundInternship);
+          if (internshipData) {
+            setInternship(internshipData);
+          } else {
+            console.error('Internship not found');
+          }
+        } catch (error) {
+          console.error('Error fetching internship:', error);
+        } finally {
+          setLoading(false);
+        }
       }
-    }
+    };
 
     // In a real application, this would fetch student documents from an API
     const mockStudentDocuments: Document[] = [
@@ -250,7 +204,14 @@ const ApplicationFormPage = () => {
     ];
 
     setStudentDocuments(mockStudentDocuments);
-  }, [params]);
+
+    // Fetch the internship data only if we have a token
+    if (token) {
+      fetchInternship();
+    } else {
+      setLoading(false);
+    }
+  }, [params, token]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -308,22 +269,131 @@ const ApplicationFormPage = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) {
+      alert('Anda harus login terlebih dahulu untuk mengirim lamaran');
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate form submission
-    setTimeout(() => {
+    try {
+      // Prepare application data
+      const applicationData: any = {
+        job_id: internship?.id,
+        cover_letter: formData.coverLetter,
+        portfolio_url: formData.portfolioUrl || null,
+        availability: formData.availability,
+        expected_duration: formData.expectedDuration,
+        additional_info: formData.additionalInfo,
+      };
+
+      // Only add resume_id to the payload if there are selected documents
+      if (selectedExistingDocs.length > 0) {
+        applicationData.resume_id = selectedExistingDocs[0]; // Use first selected document as resume if available
+      }
+
+      // Submit application using the service function
+      const result = await submitApplication(token, applicationData);
+
       alert('Lamaran berhasil dikirim!');
+      console.log('Application result:', result);
+
+      // Optionally, redirect user back to internships page after successful submission
+      // Router.push('/dashboard-student/find-internships');
+    } catch (error) {
+      console.error('Error submitting application:', error);
+      alert('Gagal mengirim lamaran. Silakan coba lagi.');
+    } finally {
       setIsSubmitting(false);
-      // In a real application, you would send the data to an API
-      console.log('Application submitted:', {
-        ...formData,
-        internshipId: internship?.id,
-        selectedExistingDocIds: selectedExistingDocs
-      });
-    }, 1500);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        {/* Header */}
+        <header className={`fixed top-0 left-0 right-0 backdrop-blur-sm z-50 border-b ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-[#e5e7eb]'}`}>
+          <div className="max-w-[1200px] mx-auto px-[40px] py-4">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="md:hidden mr-4"
+                >
+                  <svg className={`w-6 h-6 ${darkMode ? 'text-white' : 'text-gray-900'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <div className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>Aplikasi Magang</div>
+              </div>
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={toggleDarkMode}
+                  className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
+                  aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                >
+                  {darkMode ? (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                    </svg>
+                  )}
+                </button>
+                <div className="flex items-center space-x-2">
+                  <div className={`h-10 w-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center`}>
+                    <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                      {userInitial}
+                    </span>
+                  </div>
+                  <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                    {userName}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex pt-16">
+          {/* Sidebar */}
+          {(sidebarOpen || (typeof window !== 'undefined' && window.innerWidth >= 768)) && (
+            <div className="hidden md:block">
+              <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
+            </div>
+          )}
+
+          {/* Mobile sidebar overlay */}
+          {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
+            <div
+              className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
+              onClick={() => setSidebarOpen(false)}
+            ></div>
+          )}
+
+          {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
+            <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
+              <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
+            </div>
+          )}
+
+          {/* Main Content */}
+          <main className={`flex-1 ${(sidebarOpen || (typeof window !== 'undefined' && window.innerWidth >= 768)) ? 'md:ml-64' : ''} p-6 pt-12`}>
+            <div className="max-w-[1200px] mx-auto flex justify-center items-center h-[calc(100vh-10rem)]">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f59e0b] mx-auto"></div>
+                <p className={`mt-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Memuat data magang...</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   if (!internship) {
     return (
@@ -376,28 +446,28 @@ const ApplicationFormPage = () => {
 
         <div className="flex pt-16">
           {/* Sidebar */}
-          {(sidebarOpen || window.innerWidth >= 768) && (
+          {(sidebarOpen || (typeof window !== 'undefined' && window.innerWidth >= 768)) && (
             <div className="hidden md:block">
               <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
             </div>
           )}
 
           {/* Mobile sidebar overlay */}
-          {sidebarOpen && window.innerWidth < 768 && (
+          {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
             <div
               className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
               onClick={() => setSidebarOpen(false)}
             ></div>
           )}
 
-          {sidebarOpen && window.innerWidth < 768 && (
+          {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
             <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
               <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
             </div>
           )}
 
           {/* Main Content */}
-          <main className={`flex-1 ${sidebarOpen ? 'md:ml-64' : ''} p-6 pt-12`}>
+          <main className={`flex-1 ${(sidebarOpen || (typeof window !== 'undefined' && window.innerWidth >= 768)) ? 'md:ml-64' : ''} p-6 pt-12`}>
             <div className="max-w-[1200px] mx-auto">
               <div className="rounded-xl p-12 text-center bg-white dark:bg-gray-800 shadow">
                 <svg className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -407,7 +477,7 @@ const ApplicationFormPage = () => {
                 <p className="mt-2 text-gray-500 dark:text-gray-400">
                   Magang yang Anda cari tidak ditemukan. Silakan kembali ke halaman sebelumnya.
                 </p>
-                <a 
+                <a
                   href="/dashboard-student/find-internships"
                   className={`mt-4 inline-block px-4 py-2 rounded-lg ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`}
                 >
@@ -471,21 +541,21 @@ const ApplicationFormPage = () => {
 
       <div className="flex pt-16">
         {/* Sidebar */}
-        {(sidebarOpen || window.innerWidth >= 768) && (
+        {(sidebarOpen || (typeof window !== 'undefined' && window.innerWidth >= 768)) && (
           <div className="hidden md:block">
             <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
           </div>
         )}
 
         {/* Mobile sidebar overlay */}
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
           <div
             className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
             onClick={() => setSidebarOpen(false)}
           ></div>
         )}
 
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
             <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
           </div>
@@ -514,7 +584,9 @@ const ApplicationFormPage = () => {
                       <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
-                      {internship.type}
+                      {internship.type === 'wfo' ? 'WFO' :
+                       internship.type === 'wfh' ? 'WFH' :
+                       'Hybrid'}
                     </span>
                     <span className={`flex items-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -522,19 +594,59 @@ const ApplicationFormPage = () => {
                       </svg>
                       {internship.duration}
                     </span>
+                    <span className={`flex items-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {internship.paid === 'paid' ? 'Berbayar' : 'Tidak Berbayar'}
+                    </span>
                   </div>
                 </div>
               </div>
               <p className={`mt-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{internship.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {internship.tags.map((tag, index) => (
-                  <span 
-                    key={index} 
+                {internship.tags?.map((tag, index) => (
+                  <span
+                    key={index}
                     className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}
                   >
                     {tag}
                   </span>
                 ))}
+              </div>
+
+              {/* Additional internship details */}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Persyaratan</h4>
+                  <ul className="mt-1">
+                    {internship.requirements?.map((req, index) => (
+                      <li key={index} className="flex items-start">
+                        <svg className={`w-4 h-4 mt-1 mr-2 ${darkMode ? 'text-green-400' : 'text-green-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{req}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Informasi Tambahan</h4>
+                  <div className="space-y-1">
+                    <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Minimal Semester: {internship.minSemester}
+                    </div>
+                    {internship.salary && (
+                      <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Gaji: {internship.salary}
+                      </div>
+                    )}
+                    <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Status: {internship.status}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

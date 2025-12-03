@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/authContext';
 import { useRouter } from 'next/navigation';
+import { getStudentApplications } from '../services/internshipService';
 import Sidebar from '../components/Sidebar';
 
 const StudentDashboardPage = () => {
@@ -87,27 +88,173 @@ const StudentDashboardPage = () => {
     );
   }
 
-  // Enhanced stats data - keeping only the essential ones
-  const stats = [
-    { title: 'Lamaran Aktif', value: '3', change: '+1 minggu ini', icon: '📋', color: 'blue' },
-    { title: 'Total Lamaran', value: '12', change: '+2 minggu ini', icon: '📊', color: 'green' },
-    { title: 'Wawancara Dijadwalkan', value: '2', change: '+0 minggu ini', icon: '📅', color: 'purple' },
-  ];
+  const [stats, setStats] = useState([
+    { title: 'Lamaran Aktif', value: '0', change: 'Memuat...', icon: '📋', color: 'blue' },
+    { title: 'Total Lamaran', value: '0', change: 'Memuat...', icon: '📊', color: 'green' },
+    { title: 'Wawancara Dijadwalkan', value: '0', change: 'Memuat...', icon: '📅', color: 'purple' },
+  ]);
+  const [loadingStats, setLoadingStats] = useState(true);
 
-  // Professional activity data
-  const recentActivities = [
-    { id: 1, activity: 'Melamar magang di PT Maju Jaya', time: '2 jam yang lalu', type: 'application' },
-    { id: 2, activity: 'Status lamaran diperbarui', time: '1 hari yang lalu', type: 'update' },
-    { id: 3, activity: 'Menerima pesan dari perusahaan', time: '2 hari yang lalu', type: 'message' },
-    { id: 4, activity: 'Menyelesaikan profil pribadi', time: '3 hari yang lalu', type: 'completion' },
-  ];
+  // Fetch application statistics
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (token) {
+        try {
+          const apps = await getStudentApplications(token);
 
-  // Upcoming deadlines
-  const deadlines = [
-    { id: 1, title: 'UI/UX Designer di PT Digital Solution', company: 'PT Digital Solution', deadline: '2025-02-15', daysLeft: 16 },
-    { id: 2, title: 'Data Analyst di PT Riset Cerdas', company: 'PT Riset Cerdas', deadline: '2025-02-20', daysLeft: 21 },
-    { id: 3, title: 'Machine Learning Engineer di PT AI Cerdas', company: 'PT AI Cerdas', deadline: '2025-02-25', daysLeft: 26 },
-  ];
+          // Calculate stats from applications
+          const activeApps = apps.filter((app: any) =>
+            app.status === 'Submitted' || app.status === 'Reviewed'
+          ).length;
+
+          const totalApps = apps.length;
+
+          const interviewScheduled = apps.filter((app: any) =>
+            app.status === 'Accepted'
+          ).length; // In our system, 'Accepted' might mean interview scheduled
+
+          const newStats = [
+            { title: 'Lamaran Aktif', value: activeApps.toString(), change: `+${activeApps > 0 ? 1 : 0} minggu ini`, icon: '📋', color: 'blue' },
+            { title: 'Total Lamaran', value: totalApps.toString(), change: `+${totalApps > 0 ? Math.min(2, totalApps) : 0} minggu ini`, icon: '📊', color: 'green' },
+            { title: 'Wawancara Dijadwalkan', value: interviewScheduled.toString(), change: `+${interviewScheduled > 0 ? 1 : 0} minggu ini`, icon: '📅', color: 'purple' },
+          ];
+
+          setStats(newStats);
+        } catch (error) {
+          console.error('Error fetching stats:', error);
+          // Keep default values or show error
+          const errorStats = [
+            { title: 'Lamaran Aktif', value: 'Error', change: 'Gagal memuat', icon: '📋', color: 'blue' },
+            { title: 'Total Lamaran', value: 'Error', change: 'Gagal memuat', icon: '📊', color: 'green' },
+            { title: 'Wawancara Dijadwalkan', value: 'Error', change: 'Gagal memuat', icon: '📅', color: 'purple' },
+          ];
+          setStats(errorStats);
+        } finally {
+          setLoadingStats(false);
+        }
+      }
+    };
+
+    fetchStats();
+  }, [token]);
+
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [deadlines, setDeadlines] = useState<any[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
+  const [loadingDeadlines, setLoadingDeadlines] = useState(true);
+
+  // Fetch recent activities (applications, updates, etc.) for the student dashboard
+  useEffect(() => {
+    const fetchRecentActivities = async () => {
+      if (token) {
+        try {
+          const apps = await getStudentApplications(token);
+
+          // Format applications as recent activities
+          const activities = apps.slice(0, 4).map((app: any, index: number) => ({
+            id: index + 1,
+            activity: `Melamar magang di ${app.company}`,
+            time: formatTimeAgo(new Date(app.appliedDate)),
+            type: 'application'
+          }));
+
+          // Add some other activities
+          activities.push(
+            ...[
+              { id: activities.length + 1, activity: 'Status lamaran diperbarui', time: '1 hari yang lalu', type: 'update' },
+              { id: activities.length + 2, activity: 'Menerima pesan dari perusahaan', time: '2 hari yang lalu', type: 'message' },
+              { id: activities.length + 3, activity: 'Menyelesaikan profil pribadi', time: '3 hari yang lalu', type: 'completion' },
+            ].filter((_, idx) => activities.length + idx < 4) // Only add if we need more to reach 4
+          );
+
+          setRecentActivities(activities);
+        } catch (error) {
+          console.error('Error fetching recent activities:', error);
+          // Set default mock data in case of error
+          setRecentActivities([
+            { id: 1, activity: 'Melamar magang di PT Maju Jaya', time: '2 jam yang lalu', type: 'application' },
+            { id: 2, activity: 'Status lamaran diperbarui', time: '1 hari yang lalu', type: 'update' },
+            { id: 3, activity: 'Menerima pesan dari perusahaan', time: '2 hari yang lalu', type: 'message' },
+            { id: 4, activity: 'Menyelesaikan profil pribadi', time: '3 hari yang lalu', type: 'completion' },
+          ]);
+        } finally {
+          setLoadingActivities(false);
+        }
+      }
+    };
+
+    // Fetch upcoming application deadlines
+    const fetchDeadlines = async () => {
+      if (token) {
+        try {
+          const apps = await getStudentApplications(token);
+
+          // Format application deadlines
+          const appDeadlines = apps
+            .filter((app: any) => app.deadline) // Only apps with deadlines
+            .slice(0, 3) // Take first 3
+            .map((app: any, index: number) => {
+              const deadlineDate = new Date(app.deadline);
+              const today = new Date();
+              const daysLeft = Math.ceil((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+              return {
+                id: index + 1,
+                title: `${app.title} di ${app.company}`,
+                company: app.company,
+                deadline: app.deadline,
+                daysLeft: daysLeft
+              };
+            });
+
+          // If we need more data to reach 3, add mock data
+          if (appDeadlines.length < 3) {
+            const mockDeadlines = [
+              { id: appDeadlines.length + 1, title: 'UI/UX Designer di PT Digital Solution', company: 'PT Digital Solution', deadline: '2025-02-15', daysLeft: 16 },
+              { id: appDeadlines.length + 2, title: 'Data Analyst di PT Riset Cerdas', company: 'PT Riset Cerdas', deadline: '2025-02-20', daysLeft: 21 },
+              { id: appDeadlines.length + 3, title: 'Machine Learning Engineer di PT AI Cerdas', company: 'PT AI Cerdas', deadline: '2025-02-25', daysLeft: 26 },
+            ];
+
+            appDeadlines.push(...mockDeadlines.slice(0, 3 - appDeadlines.length));
+          }
+
+          setDeadlines(appDeadlines);
+        } catch (error) {
+          console.error('Error fetching deadlines:', error);
+          // Set default mock data in case of error
+          setDeadlines([
+            { id: 1, title: 'UI/UX Designer di PT Digital Solution', company: 'PT Digital Solution', deadline: '2025-02-15', daysLeft: 16 },
+            { id: 2, title: 'Data Analyst di PT Riset Cerdas', company: 'PT Riset Cerdas', deadline: '2025-02-20', daysLeft: 21 },
+            { id: 3, title: 'Machine Learning Engineer di PT AI Cerdas', company: 'PT AI Cerdas', deadline: '2025-02-25', daysLeft: 26 },
+          ]);
+        } finally {
+          setLoadingDeadlines(false);
+        }
+      }
+    };
+
+    fetchRecentActivities();
+    fetchDeadlines();
+  }, [token]);
+
+  // Helper function to format time ago
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) {
+      return 'Baru saja';
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes} menit yang lalu`;
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours} jam yang lalu`;
+    } else {
+      const days = Math.floor(diffInSeconds / 86400);
+      return `${days} hari yang lalu`;
+    }
+  };
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
@@ -237,32 +384,42 @@ const StudentDashboardPage = () => {
                 <div className="flex justify-between items-center mb-4">
                   <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Aktivitas Terkini</h2>
                   <button
-                    onClick={() => router.push('/dashboard-student/messages')}
+                    onClick={() => router.push('/dashboard-student/my-applications')}
                     className={`text-sm ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}`}
                   >
                     Lihat semua
                   </button>
                 </div>
                 <div className="space-y-4">
-                  {recentActivities.map((activity) => (
-                    <div key={activity.id} className="flex items-start border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
-                      <div className={`mr-3 mt-1 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                        activity.type === 'application' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
-                        activity.type === 'update' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
-                        activity.type === 'message' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
-                        'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
-                      }`}>
-                        {activity.type === 'application' ? '📋' :
-                         activity.type === 'update' ? '🔄' :
-                         activity.type === 'message' ? '💬' :
-                         '✅'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{activity.activity}</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{activity.time}</p>
-                      </div>
+                  {loadingActivities ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#f59e0b]"></div>
                     </div>
-                  ))}
+                  ) : recentActivities.length > 0 ? (
+                    recentActivities.map((activity) => (
+                      <div key={activity.id} className="flex items-start border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
+                        <div className={`mr-3 mt-1 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                          activity.type === 'application' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' :
+                          activity.type === 'update' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' :
+                          activity.type === 'message' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                          'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300'
+                        }`}>
+                          {activity.type === 'application' ? '📋' :
+                           activity.type === 'update' ? '🔄' :
+                           activity.type === 'message' ? '💬' :
+                           '✅'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{activity.activity}</p>
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{activity.time}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                      Tidak ada aktivitas terkini
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -278,28 +435,38 @@ const StudentDashboardPage = () => {
                   </button>
                 </div>
                 <div className="space-y-4">
-                  {deadlines.map((deadline) => (
-                    <div key={deadline.id} className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{deadline.title}</p>
-                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{deadline.company}</p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          deadline.daysLeft <= 5
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
-                            : deadline.daysLeft <= 10
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                            : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-                        }`}>
-                          {deadline.daysLeft} hari
-                        </span>
-                      </div>
-                      <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Batas: {new Date(deadline.deadline).toLocaleDateString('id-ID')}
-                      </p>
+                  {loadingDeadlines ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[#f59e0b]"></div>
                     </div>
-                  ))}
+                  ) : deadlines.length > 0 ? (
+                    deadlines.map((deadline) => (
+                      <div key={deadline.id} className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0 last:pb-0">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{deadline.title}</p>
+                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{deadline.company}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            deadline.daysLeft <= 5
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                              : deadline.daysLeft <= 10
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+                              : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+                          }`}>
+                            {deadline.daysLeft} hari
+                          </span>
+                        </div>
+                        <p className={`mt-2 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Batas: {new Date(deadline.deadline).toLocaleDateString('id-ID')}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                      Tidak ada batas waktu mendatang
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

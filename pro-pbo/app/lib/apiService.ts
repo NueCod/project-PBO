@@ -157,6 +157,15 @@ export const getStudentProfile = async (token: string): Promise<StudentProfile> 
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+
+      // Jika error karena akses ditolak (bukan student), kembalikan null atau nilai default
+      if (response.status === 403) {
+        console.warn('Access to student profile denied - user might not be a student');
+        // Kita tidak melempar error di sini karena itu akan menghentikan alur aplikasi
+        // Melainkan kita kembalikan nilai default atau null
+        return null as unknown as StudentProfile; // Type assertion untuk menghindari error TypeScript
+      }
+
       throw new Error(`Get profile failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
     }
 
@@ -172,7 +181,9 @@ export const getStudentProfile = async (token: string): Promise<StudentProfile> 
     return responseData;
   } catch (error) {
     console.error('Get profile error:', error);
-    throw error;
+    // Kita tidak melempar error di sini untuk mencegah crash UI
+    // Melainkan kembalikan nilai default
+    return null as unknown as StudentProfile; // Type assertion untuk menghindari error TypeScript
   }
 };
 

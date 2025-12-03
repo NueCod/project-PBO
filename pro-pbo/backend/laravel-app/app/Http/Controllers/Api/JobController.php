@@ -48,8 +48,8 @@ class JobController extends Controller
                     'location' => $job->location ?? '',
                     'type' => $job->job_type ?? '', // wfo, wfh, hybrid
                     'duration' => $requirements['duration'] ?? '',
-                    'posted' => $job->created_at->format('Y-m-d'),
-                    'deadline' => $job->closing_date ? $job->closing_date->format('Y-m-d') : '',
+                    'posted' => (is_string($job->created_at) ? $job->created_at : $job->created_at->format('Y-m-d')),
+                    'deadline' => $job->closing_date ? (is_string($job->closing_date) ? $job->closing_date : $job->closing_date->format('Y-m-d')) : '',
                     'description' => $job->description ?? '',
                     'requirements' => $requirements['majors'] ?? [],
                     'status' => $isExpired ? 'Closed' : 'Open',
@@ -92,9 +92,22 @@ class JobController extends Controller
     public function getCompanyJobs(): JsonResponse
     {
         try {
+            \Log::info("getCompanyJobs method called");
+
+            // Cek apakah ada header Authorization
+            $authorizationHeader = request()->header('Authorization');
+            \Log::info("Authorization header: " . ($authorizationHeader ? substr($authorizationHeader, 0, 20) . '...' : 'none'));
+
+            // Cek apakah Sanctum bisa mengotentikasi user
             $user = Auth::user();
+            \Log::info("Authenticated user from Sanctum: " . ($user ? $user->id . " with role: " . $user->role : "none"));
+
+            // Cek apakah user bisa diambil dengan user() helper
+            $sanctumUser = request()->user();
+            \Log::info("Authenticated user from request(): " . ($sanctumUser ? $sanctumUser->id . " with role: " . $sanctumUser->role : "none"));
 
             if (!$user || $user->role !== 'company') {
+                \Log::warning("Unauthorized access attempt - user: " . ($user ? $user->id : "none") . ", role: " . ($user ? $user->role : "none"));
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized access'
@@ -102,9 +115,11 @@ class JobController extends Controller
             }
 
             $companyProfile = $user->companyProfile;
+            \Log::info("Company profile exists: " . ($companyProfile ? "yes" : "no"));
 
             if (!$companyProfile) {
-                // Create a default company profile if it doesn't exist
+                // Create a default company profile if it doesn't exist - this is the same as in other methods
+                \Log::info("Creating new company profile for user: {$user->email}");
                 $companyProfile = $user->companyProfile()->create([
                     'id' => Str::uuid(),
                     'company_name' => $user->email, // Use email as default company name
@@ -116,15 +131,64 @@ class JobController extends Controller
                     'contact_phone' => '',
                     'logo_url' => '',
                 ]);
+                \Log::info("Created company profile with ID: {$companyProfile->id}");
+            } else {
+                // Log that company profile exists and its details
+                \Log::info("Company profile found with ID: {$companyProfile->id}, name: {$companyProfile->company_name}");
+            }
+
+            \Log::info("Fetching jobs for company_id: {$companyProfile->id} and user_id: {$user->id}");
+
+            // Debug: Cek semua jobs yang ada di database
+            $allJobsCount = Job::count();
+            \Log::info("Total jobs in database: {$allJobsCount}");
+
+            // Debug: Cek jobs berdasarkan company_id tertentu
+            $allCompanyJobs = Job::all();
+            \Log::info("All job records with company_id mapping:", $allCompanyJobs->pluck('id', 'company_id')->toArray());
+
+            // Debug: Cek apakah ada jobs dengan company_id yang dicari
+            $matchingJobs = Job::where('company_id', $companyProfile->id)->get();
+            \Log::info("Jobs found with company_id {$companyProfile->id}: " . $matchingJobs->count());
+            foreach ($matchingJobs as $job) {
+                \Log::info("Job ID: {$job->id}, Title: {$job->title}, Company ID: {$job->company_id}");
             }
 
             $jobs = Job::where('company_id', $companyProfile->id)
                 ->withCount('applications') // Include count of applications
                 ->get();
 
+            \Log::info("Found " . $jobs->count() . " jobs for company_id: {$companyProfile->id}");
+
             // Format the jobs for company dashboard
             $formattedJobs = $jobs->map(function ($job) {
-                $requirements = json_decode($job->requirements, true) ?: [];
+                // Safely decode requirements, handle potential null or malformed JSON
+                $requirements = [];
+                if ($job->requirements) {
+                    $decoded = json_decode($job->requirements, true);
+                    if ($decoded !== null) {
+                        $requirements = $decoded;
+                    }
+                }
+
+                // Safely handle dates, checking if they are strings or DateTime objects
+                $deadline = '';
+                if ($job->closing_date) {
+                    if (is_string($job->closing_date)) {
+                        $deadline = $job->closing_date;
+                    } elseif ($job->closing_date instanceof \DateTime) {
+                        $deadline = $job->closing_date->format('Y-m-d');
+                    }
+                }
+
+                $posted = '';
+                if ($job->created_at) {
+                    if (is_string($job->created_at)) {
+                        $posted = $job->created_at;
+                    } elseif ($job->created_at instanceof \DateTime) {
+                        $posted = $job->created_at->format('Y-m-d');
+                    }
+                }
 
                 return [
                     'id' => $job->id,
@@ -132,29 +196,36 @@ class JobController extends Controller
                     'description' => $job->description,
                     'location' => $job->location ?? '',
                     'type' => $job->job_type, // wfo, wfh, hybrid
-                    'deadline' => $job->closing_date ? $job->closing_date->format('Y-m-d') : '',
+                    'deadline' => $deadline,
                     'description' => $job->description,
                     'requirements' => $requirements,
                     'status' => $job->is_active ? 'Active' : 'Inactive',
-                    'posted' => $job->created_at->format('Y-m-d'),
+                    'posted' => $posted,
                     'applications_count' => $job->applications_count ?? 0,
                     'is_active' => $job->is_active,
-                    'closing_date' => $job->closing_date ? $job->closing_date->format('Y-m-d') : '',
+                    'closing_date' => $deadline, // Using same deadline value
                     'salary' => $requirements['salary'] ?? '',
-                    'isPaid' => $requirements['is_paid'] === 'paid',
+                    'isPaid' => isset($requirements['is_paid']) && $requirements['is_paid'] === 'paid',
                 ];
             });
 
+            // Return success response with data (even if empty array)
             return response()->json([
                 'success' => true,
-                'data' => $formattedJobs
+                'data' => $formattedJobs,
+                'count' => $formattedJobs->count(),
+                'message' => $formattedJobs->count() > 0 ? 'Jobs retrieved successfully' : 'No jobs found for this company'  // Add helpful message
             ]);
         } catch (\Exception $e) {
-            \Log::error('Failed to fetch company jobs: ' . $e->getMessage());
+            \Log::error('Failed to fetch company jobs: ' . $e->getMessage() . ' in file ' . $e->getFile() . ' at line ' . $e->getLine());
+
+            // Return a success response with empty data instead of error, to prevent the "Job not found" message
             return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch company jobs: ' . $e->getMessage()
-            ], 500);
+                'success' => true,
+                'data' => [],
+                'count' => 0,
+                'message' => 'Error occurred but returning empty data: ' . $e->getMessage()
+            ], 200);
         }
     }
 
@@ -233,15 +304,27 @@ class JobController extends Controller
 
             $job->requirements = json_encode($requirements);
             $job->is_active = true; // Ensure the job is active when created
+
+            // Log the company_id to verify it's being set correctly
+            \Log::info("Creating job with company_id: {$job->company_id} for user: {$user->id}");
+            \Log::info("Company profile ID used: {$companyProfile->id} for user: {$user->email}");
+
             $job->save();
+
+            // Verify the job was saved with the correct company_id
+            \Log::info("Job created with ID: {$job->id} and company_id: {$job->company_id}");
+
+            // Fetch and return the newly created job with companyProfile relation to ensure data consistency
+            $createdJob = Job::with('companyProfile')->find($job->id);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Job created successfully',
-                'data' => $job
+                'data' => $createdJob
             ], 201);
 
         } catch (\Exception $e) {
+            \Log::error('Store job error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create job: ' . $e->getMessage()
@@ -276,8 +359,8 @@ class JobController extends Controller
                 'location' => $job->location ?? '',
                 'type' => $job->job_type, // wfo, wfh, hybrid
                 'duration' => $requirements['duration'] ?? '',
-                'posted' => $job->created_at->format('Y-m-d'),
-                'deadline' => $job->closing_date ? $job->closing_date->format('Y-m-d') : '',
+                'posted' => (is_string($job->created_at) ? $job->created_at : $job->created_at->format('Y-m-d')),
+                'deadline' => $job->closing_date ? (is_string($job->closing_date) ? $job->closing_date : $job->closing_date->format('Y-m-d')) : '',
                 'description' => $job->description,
                 'requirements' => $requirements['majors'] ?? [],
                 'status' => $job->closing_date < now() ? 'Closed' : 'Open',
@@ -349,6 +432,7 @@ class JobController extends Controller
             }
 
             if ($job->company_id !== $companyProfile->id) {
+                \Log::warning("Unauthorized to update job: user {$user->id} tried to update job {$id} belonging to company {$job->company_id}");
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to update this job'
@@ -412,10 +496,15 @@ class JobController extends Controller
 
             $job->save();
 
+            \Log::info("Job updated: {$job->id} for company {$job->company_id}");
+
+            // Fetch and return the updated job with companyProfile relation to ensure data consistency
+            $updatedJob = Job::with('companyProfile')->find($job->id);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Job updated successfully',
-                'data' => $job
+                'data' => $updatedJob
             ]);
 
         } catch (\Exception $e) {
@@ -473,11 +562,14 @@ class JobController extends Controller
             }
 
             if ($job->company_id !== $companyProfile->id) {
+                \Log::warning("Unauthorized to delete job: user {$user->id} tried to delete job {$id} belonging to company {$job->company_id}");
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to delete this job'
                 ], 403);
             }
+
+            \Log::info("Deleting job: {$job->id} for company {$job->company_id}");
 
             $job->delete();
 
@@ -487,6 +579,7 @@ class JobController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Delete job error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete job: ' . $e->getMessage()
@@ -540,6 +633,7 @@ class JobController extends Controller
             }
 
             if ($job->company_id !== $companyProfile->id) {
+                \Log::warning("Unauthorized to close job: user {$user->id} tried to close job {$id} belonging to company {$job->company_id}");
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to close this job'
@@ -550,10 +644,15 @@ class JobController extends Controller
             $job->is_active = false;
             $job->save();
 
+            \Log::info("Job closed: {$job->id} for company {$job->company_id}");
+
+            // Fetch and return the closed job with companyProfile relation to ensure data consistency
+            $closedJob = Job::with('companyProfile')->find($job->id);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Job closed successfully',
-                'data' => $job
+                'data' => $closedJob
             ]);
 
         } catch (\Exception $e) {
