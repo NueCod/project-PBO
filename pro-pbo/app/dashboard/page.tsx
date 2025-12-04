@@ -22,7 +22,7 @@ type Activity = {
 const DashboardPage = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true); // Move this to the top with other state declarations
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, token } = useAuth(); // Get the token as well
   const router = useRouter();
 
   // Redirect based on user role
@@ -94,19 +94,191 @@ const DashboardPage = () => {
     setDarkMode(!darkMode);
   };
 
-  const stats: StatCard[] = [
-    { title: 'Total Magang', value: '12', change: '+2 bulan ini', icon: '💼' },
-    { title: 'Mahasiswa Aktif', value: '48', change: '+5 bulan ini', icon: '👥' },
-    { title: 'Lamaran Masuk', value: '32', change: '+7 bulan ini', icon: '📋' },
-    { title: 'Diterima', value: '18', change: '+3 bulan ini', icon: '✅' },
-  ];
+  const [stats, setStats] = useState<StatCard[]>([
+    { title: 'Total Magang', value: '0', change: 'Memuat...', icon: '💼' },
+    { title: 'Mahasiswa Aktif', value: '0', change: 'Memuat...', icon: '👥' },
+    { title: 'Lamaran Masuk', value: '0', change: 'Memuat...', icon: '📋' },
+    { title: 'Diterima', value: '0', change: 'Memuat...', icon: '✅' },
+  ]);
 
-  const recentActivities: Activity[] = [
-    { id: 1, user: 'Budi Santoso', action: 'Melamar magang di bagian Pemasaran', time: '10 menit yang lalu' },
-    { id: 2, user: 'Siti Nurhaliza', action: 'Melengkapi dokumen magang', time: '1 jam yang lalu' },
-    { id: 3, user: 'Ahmad Fauzi', action: 'Mengunggah portofolio', time: '2 jam yang lalu' },
-    { id: 4, user: 'Rina Kartika', action: 'Mengajukan perpanjangan magang', time: '3 jam yang lalu' },
-  ];
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+  const [applicationStats, setApplicationStats] = useState({
+    accepted: 0,
+    inProcess: 0,
+    rejected: 0,
+    conversionRate: 0
+  });
+  const [topJobs, setTopJobs] = useState<Array<{rank: number, title: string, applications: number}>>([]);
+  const [upcomingDeadlines, setUpcomingDeadlines] = useState<Array<{title: string, daysLeft: number, pendingApplications: number}>>([]);
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
+
+  // Fetch company profile
+  useEffect(() => {
+    const fetchCompanyProfile = async () => {
+      if (!token) {
+        console.warn('No token available, cannot fetch company profile');
+        return;
+      }
+
+      console.log('Fetching company profile with token:', token);
+      try {
+        const profile = await import('../services/internshipService').then(mod => mod.getCompanyProfile);
+        const companyData = await profile(token);
+        console.log('Fetched company profile data:', companyData);
+        setCompanyProfile(companyData);
+      } catch (error) {
+        console.error('Error fetching company profile:', error);
+        // Use fallback if profile fetch fails
+      }
+    };
+
+    if (token) {
+      fetchCompanyProfile();
+    }
+  }, [token]);
+
+  // Fetch dashboard stats and activities
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!token) {
+        console.warn('No token available, cannot fetch dashboard data');
+        return;
+      }
+
+      try {
+        // Fetch company's jobs
+        const jobsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/jobs/company`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        let totalInternships = 0;
+        if (jobsResponse.ok) {
+          const jobsData = await jobsResponse.json();
+          totalInternships = jobsData.data?.length || 0;
+        }
+
+        // Fetch company's applications
+        const applicationsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/company/applications`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        let applicationsData = [];
+        let appliedStudents = 0;
+        let totalApplications = 0;
+        let acceptedApplications = 0;
+        if (applicationsResponse.ok) {
+          const appData = await applicationsResponse.json();
+          applicationsData = appData.data || [];
+          totalApplications = applicationsData.length;
+
+          // Count unique students
+          const uniqueStudents = new Set(applicationsData.map((app: any) => app.student_id));
+          appliedStudents = uniqueStudents.size;
+
+          // Count accepted applications
+          acceptedApplications = applicationsData.filter((app: any) => app.status === 'Accepted').length;
+        }
+
+        // Calculate application status statistics
+        let acceptedCount = 0;
+        let inProcessCount = 0; // This would typically include 'Applied', 'Reviewed', 'Interview' statuses
+        let rejectedCount = 0;
+
+        applicationsData.forEach((app: any) => {
+          if (app.status === 'Accepted') {
+            acceptedCount++;
+          } else if (app.status === 'Rejected') {
+            rejectedCount++;
+          } else {
+            // Other statuses ('Applied', 'Reviewed', 'Interview') count as in process
+            inProcessCount++;
+          }
+        });
+
+        // Calculate conversion rate (Accepted / Total Applications * 100)
+        const conversionRate = totalApplications > 0
+          ? Math.round((acceptedCount / totalApplications) * 100)
+          : 0;
+
+        // Update stats
+        setStats([
+          { title: 'Total Magang', value: totalInternships.toString(), change: '+0 bulan ini', icon: '💼' },
+          { title: 'Mahasiswa Aktif', value: appliedStudents.toString(), change: '+0 bulan ini', icon: '👥' },
+          { title: 'Lamaran Masuk', value: totalApplications.toString(), change: '+0 bulan ini', icon: '📋' },
+          { title: 'Diterima', value: acceptedCount.toString(), change: '+0 bulan ini', icon: '✅' },
+        ]);
+
+        // Update application status stats
+        setApplicationStats({
+          accepted: acceptedCount,
+          inProcess: inProcessCount,
+          rejected: rejectedCount,
+          conversionRate: conversionRate
+        });
+
+        // Get recent activities from applications data
+        const activities = applicationsData.slice(0, 4).map((app: any, index: number) => ({
+          id: index + 1,
+          user: app.student_name,
+          action: `Melamar magang di ${app.job_title}`,
+          time: new Date(app.applied_date).toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          })
+        }));
+
+        setRecentActivities(activities);
+
+        // Calculate popular internships (based on application count)
+        const applicationCountByJob: Record<string, number> = {};
+        applicationsData.forEach((app: any) => {
+          if (applicationCountByJob[app.job_title]) {
+            applicationCountByJob[app.job_title]++;
+          } else {
+            applicationCountByJob[app.job_title] = 1;
+          }
+        });
+
+        // Get top 5 most applied jobs
+        const topJobs = Object.entries(applicationCountByJob)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([jobTitle, count], index) => ({
+            rank: index + 1,
+            title: jobTitle,
+            applications: count
+          }));
+
+        setTopJobs(topJobs);
+
+        // Calculate upcoming deadlines (for this example, we'll use mock upcoming deadlines based on jobs)
+        // In a real implementation, you'd want to get this from the jobs data which should include closing dates
+        const mockDeadlines = totalInternships > 0 ? [
+          {
+            title: jobsData.data[0]?.title || 'Program Magang Terbaru',
+            daysLeft: 5,
+            pendingApplications: totalApplications
+          }
+        ] : [];
+        setUpcomingDeadlines(mockDeadlines);
+
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        // Keep loading state or show error to user if needed
+      }
+    };
+
+    if (token) {
+      fetchDashboardData();
+    }
+  }, [token]);
 
   // Toggle sidebar on mobile
   useEffect(() => {
@@ -120,7 +292,7 @@ const DashboardPage = () => {
 
     handleResize();
     window.addEventListener('resize', handleResize);
-    
+
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -161,9 +333,15 @@ const DashboardPage = () => {
               </button>
               <div className="flex items-center space-x-2">
                 <div className={`h-10 w-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center`}>
-                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>P</span>
+                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                    {companyProfile?.name
+                      ? companyProfile.name.charAt(0).toUpperCase()
+                      : user?.email?.charAt(0).toUpperCase() || 'C'}
+                  </span>
                 </div>
-                <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>PT Maju Jaya</span>
+                <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                  {companyProfile?.name || user?.email?.split('@')[0] || 'Perusahaan'}
+                </span>
               </div>
             </div>
           </div>
@@ -174,27 +352,21 @@ const DashboardPage = () => {
         {/* Sidebar */}
         {(sidebarOpen || window.innerWidth >= 768) && (
           <div className="hidden md:block">
-            <Sidebar
-              darkMode={darkMode}
-              userProfile={user ? { name: user.email.split('@')[0], email: user.email } : undefined}
-            />
+            <Sidebar darkMode={darkMode} />
           </div>
         )}
 
         {/* Mobile sidebar overlay */}
         {sidebarOpen && window.innerWidth < 768 && (
-          <div 
+          <div
             className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
             onClick={() => setSidebarOpen(false)}
           ></div>
         )}
-        
+
         {sidebarOpen && window.innerWidth < 768 && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
-            <Sidebar
-              darkMode={darkMode}
-              userProfile={user ? { name: user.email.split('@')[0], email: user.email } : undefined}
-            />
+            <Sidebar darkMode={darkMode} />
           </div>
         )}
 
@@ -231,15 +403,15 @@ const DashboardPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Diterima</p>
-                    <p className="text-2xl font-bold text-green-500">18</p>
+                    <p className="text-2xl font-bold text-green-500">{applicationStats.accepted}</p>
                   </div>
                   <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Dalam Proses</p>
-                    <p className="text-2xl font-bold text-yellow-500">12</p>
+                    <p className="text-2xl font-bold text-yellow-500">{applicationStats.inProcess}</p>
                   </div>
                   <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Ditolak</p>
-                    <p className="text-2xl font-bold text-red-500">8</p>
+                    <p className="text-2xl font-bold text-red-500">{applicationStats.rejected}</p>
                   </div>
                 </div>
 
@@ -247,10 +419,13 @@ const DashboardPage = () => {
                 <div className="mb-6">
                   <div className="flex justify-between text-sm mb-2">
                     <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tingkat Konversi Lamaran</span>
-                    <span className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>65%</span>
+                    <span className={`font-semibold ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{applicationStats.conversionRate}%</span>
                   </div>
                   <div className={`w-full h-3 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                    <div className="bg-green-500 h-3 rounded-full" style={{ width: '65%' }}></div>
+                    <div
+                      className="bg-green-500 h-3 rounded-full"
+                      style={{ width: `${applicationStats.conversionRate}%` }}
+                    ></div>
                   </div>
                 </div>
 
@@ -258,34 +433,22 @@ const DashboardPage = () => {
                 <div>
                   <h3 className={`font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Lamaran Terbaru</h3>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
-                      <div>
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Budi Santoso</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>UI/UX Designer</p>
-                      </div>
-                      <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">Disetujui</span>
-                    </div>
-                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
-                      <div>
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Siti Nurhaliza</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Backend Developer</p>
-                      </div>
-                      <span className="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300">Dalam Proses</span>
-                    </div>
-                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
-                      <div>
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Ahmad Fauzi</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Data Analyst</p>
-                      </div>
-                      <span className="px-3 py-1 rounded-full text-xs bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">Ditolak</span>
-                    </div>
-                    <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
-                      <div>
-                        <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Rina Kartika</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Marketing Intern</p>
-                      </div>
-                      <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">Disetujui</span>
-                    </div>
+                    {recentActivities.length > 0 ? (
+                      recentActivities.map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700"
+                        >
+                          <div>
+                            <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{activity.user}</p>
+                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{activity.action}</p>
+                          </div>
+                          <span className="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">Baru</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Tidak ada aktivitas terbaru</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -296,81 +459,48 @@ const DashboardPage = () => {
 
                 <div className="mb-6">
                   <h3 className={`font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Batas Waktu Mendatang</h3>
-                  <div className={`p-4 rounded-lg ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${darkMode ? 'border-red-800' : 'border-red-200'}`}>
-                    <p className={`font-medium ${darkMode ? 'text-red-300' : 'text-red-700'}`}>Program Magang Pemasaran</p>
-                    <p className={`text-sm mt-1 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>Batas waktu: 5 hari lagi</p>
-                    <p className={`text-xs mt-2 ${darkMode ? 'text-red-500' : 'text-red-500'}`}>12 lamaran menunggu review</p>
-                  </div>
+                  {upcomingDeadlines.length > 0 ? (
+                    upcomingDeadlines.map((deadline, index) => (
+                      <div
+                        key={index}
+                        className={`p-4 rounded-lg ${darkMode ? 'bg-red-900/20' : 'bg-red-50'} border ${darkMode ? 'border-red-800' : 'border-red-200'}`}
+                      >
+                        <p className={`font-medium ${darkMode ? 'text-red-300' : 'text-red-700'}`}>{deadline.title}</p>
+                        <p className={`text-sm mt-1 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>Batas waktu: {deadline.daysLeft} hari lagi</p>
+                        <p className={`text-xs mt-2 ${darkMode ? 'text-red-500' : 'text-red-500'}`}>{deadline.pendingApplications} lamaran menunggu review</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                      <p className={`font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Tidak ada batas waktu mendatang</p>
+                    </div>
+                  )}
                 </div>
 
                 <div>
                   <h3 className={`font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Program Terpopuler</h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
-                          darkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          1
-                        </span>
-                        <div>
-                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>UI/UX Designer</p>
-                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>124 lamaran</p>
+                    {topJobs.length > 0 ? (
+                      topJobs.map((job) => (
+                        <div key={job.rank} className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
+                              job.rank === 1
+                                ? (darkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-800')
+                                : (darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700')
+                            }`}>
+                              {job.rank}
+                            </span>
+                            <div>
+                              <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{job.title}</p>
+                              <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{job.applications} lamaran</p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
-                          darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'
-                        }`}>
-                          2
-                        </span>
-                        <div>
-                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Backend Developer</p>
-                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>98 lamaran</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
-                          darkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-800'
-                        }`}>
-                          3
-                        </span>
-                        <div>
-                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Data Analyst</p>
-                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>87 lamaran</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
-                          darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'
-                        }`}>
-                          4
-                        </span>
-                        <div>
-                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Frontend Developer</p>
-                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>75 lamaran</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 ${
-                          darkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'
-                        }`}>
-                          5
-                        </span>
-                        <div>
-                          <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Digital Marketing</p>
-                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>68 lamaran</p>
-                        </div>
-                      </div>
-                    </div>
+                      ))
+                    ) : (
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Tidak ada data program terpopuler</p>
+                    )}
                   </div>
                 </div>
               </div>

@@ -3,6 +3,35 @@
 // Ambil URL API dari environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'; // Pastikan ini sesuai
 
+// Get company profile
+export const getCompanyProfile = async (token: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/profile/company`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`, // Kirim token di header
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+      throw new Error(`Get company profile failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+    }
+
+    const result = await response.json();
+    // The API returns profile data directly or wrapped in 'profile' key
+    if (result.profile) {
+      return result.profile;
+    }
+    // Otherwise return the result directly (for cases where it's not wrapped)
+    return result;
+  } catch (error) {
+    console.error('Error fetching company profile: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    throw error;
+  }
+};
+
 // Fetch all internships for students to browse
 export const getAllInternships = async (): Promise<any[]> => {
   try {
@@ -557,9 +586,216 @@ export const setInterviewSchedule = async (token: string, applicationId: string,
       console.error('Invalid response format from schedule interview API:', result);
       throw new Error('Invalid response format from server');
     }
+    console.log('Schedule interview response data:', result.data); // Additional debug log
     return result.data; // Return the updated application data
   } catch (error) {
     console.error('Error scheduling interview: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    throw error;
+  }
+};
+
+// Get all documents for the authenticated student
+export const getStudentDocuments = async (token: string) => {
+  try {
+    console.log('Fetching student documents with token:', token ? 'present' : 'missing'); // Debug log
+    const response = await fetch(`${API_BASE_URL}/documents`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`, // Kirim token di header
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log('Response status for student documents:', response.status); // Debug log
+    console.log('Response ok for student documents:', response.ok); // Debug log
+
+    if (!response.ok) {
+      // Try to get the error response as text first, then try JSON
+      let errorData;
+      let rawText = '';
+      try {
+        rawText = await response.text(); // Get as text first
+
+        // Check if rawText is empty or just whitespace before parsing
+        if (rawText.trim() === '') {
+          // If response body is empty, create a default error object
+          errorData = { message: `HTTP error ${response.status}`, raw_response: 'Empty response body' };
+        } else {
+          errorData = JSON.parse(rawText); // Then try to parse as JSON
+        }
+      } catch (parseError) {
+        // If parsing fails, return as text or an object with status
+        errorData = { message: `HTTP error ${response.status}`, raw_response: rawText || `HTTP error ${response.status}` };
+      }
+
+      // Log error response data, but avoid logging empty objects
+      if (errorData && Object.keys(errorData).length > 0) {
+        console.error('Error response data for student documents: Object with ' + (typeof errorData === 'object' && errorData !== null ? Object.keys(errorData).length + ' keys' : 'non-object')); // Debug log
+      } else {
+        console.error('Error response data for student documents: Empty response or parsing failed');
+      }
+
+      // Handle unauthenticated error specifically
+      if (response.status === 401 &&
+          (typeof errorData === 'object' && errorData.message && typeof errorData.message === 'string' && errorData.message.includes('Unauthenticated'))) {
+        // Return empty array for unauthenticated case to prevent infinite loading
+        console.log('Unauthenticated request for student documents, returning empty array');
+        return [];
+      }
+
+      throw new Error(`Get student documents failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+    }
+
+    const result = await response.json();
+    console.log('Raw API response for student documents:', result); // Debug log
+    console.log('Number of documents returned:', result.data?.length || 0); // Debug log
+
+    return result.data || []; // Extract data from response, return empty array if null
+  } catch (error) {
+    console.error('Error fetching student documents: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    throw error;
+  }
+};
+
+// Upload a new document for the student
+export const uploadStudentDocument = async (token: string, documentData: FormData) => {
+  try {
+    // Check if token exists before making request
+    if (!token) {
+      console.error('No token provided for uploadStudentDocument');
+      throw new Error('No authentication token provided');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/documents`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`, // Kirim token di header
+        // Don't set Content-Type header when using FormData, the browser will set it automatically
+      },
+      body: documentData,
+    });
+
+    console.log(`Making POST request to upload document`); // Debug log
+
+    if (!response.ok) {
+      // Try to get the error response as text first, then try JSON
+      let errorData;
+      let rawText = '';
+      try {
+        rawText = await response.text(); // Get as text first
+
+        // Check if rawText is empty or just whitespace before parsing
+        if (rawText.trim() === '') {
+          // If response body is empty, create a default error object
+          errorData = { message: `HTTP error ${response.status}`, raw_response: 'Empty response body' };
+        } else {
+          try {
+            errorData = JSON.parse(rawText); // Then try to parse as JSON
+          } catch (jsonParseError) {
+            // If JSON parsing fails, return the raw text as part of the error object
+            console.warn('Failed to parse error response as JSON:', jsonParseError);
+            errorData = {
+              message: `HTTP error ${response.status}`,
+              raw_response: rawText,
+              parse_error: 'Failed to parse error response as JSON'
+            };
+          }
+        }
+      } catch (responseError) {
+        // If getting text response fails, return as text or an object with status
+        console.error('Failed to read response text:', responseError);
+        errorData = {
+          message: `HTTP error ${response.status}`,
+          raw_response: 'Failed to read response text',
+          read_error: responseError instanceof Error ? responseError.message : String(responseError)
+        };
+      }
+
+      // Log detailed error response data to help identify the problem
+      // Use safe logging to prevent console errors
+      const errorType = typeof errorData === 'object' && errorData !== null ? 'Object' : 'Non-object';
+      console.error('Upload document error response: ' + errorType + ' with ' +
+        (typeof errorData === 'object' && errorData !== null ? Object.keys(errorData).length + ' keys' : 'unknown format'));
+
+      // Handle unauthenticated error specifically
+      if (response.status === 401) {
+        // Check if the errorData has unauthenticated message
+        const isUnauthenticated = (
+          (typeof errorData === 'object' && errorData.message && typeof errorData.message === 'string' && errorData.message.includes('Unauthenticated')) ||
+          (typeof errorData === 'object' && typeof errorData.error === 'string' && errorData.error.includes('Unauthenticated')) ||
+          (typeof errorData === 'string' && errorData.includes('Unauthenticated'))
+        );
+
+        if (isUnauthenticated) {
+          console.log('Unauthenticated request for document upload');
+        }
+      }
+
+      throw new Error(`Upload document failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+    }
+
+    const result = await response.json();
+    console.log('Upload document response: Object with ' + (typeof result === 'object' && result !== null ? Object.keys(result).length + ' keys' : 'non-object')); // More specific logging
+    return result.data; // Return the created document data
+  } catch (error) {
+    console.error('Error uploading document: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    throw error;
+  }
+};
+
+// Update a document for the student
+export const updateStudentDocument = async (token: string, documentId: string, documentData: any) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/documents/${encodeURIComponent(documentId)}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`, // Kirim token di header
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(documentData),
+    });
+
+    console.log(`Making PUT request to update document ${documentId}`); // Debug log
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+      console.error('Update document error response:', errorData); // Debug log
+      throw new Error(`Update document failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+    }
+
+    const result = await response.json();
+    console.log('Update document response:', result); // Debug log
+    return result.data; // Return the updated document data
+  } catch (error) {
+    console.error('Error updating document: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    throw error;
+  }
+};
+
+// Delete a document for the student
+export const deleteStudentDocument = async (token: string, documentId: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/documents/${encodeURIComponent(documentId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`, // Kirim token di header
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log(`Making DELETE request to delete document ${documentId}`); // Debug log
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+      console.error('Delete document error response:', errorData); // Debug log
+      throw new Error(`Delete document failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`);
+    }
+
+    const result = await response.json();
+    console.log('Delete document response:', result); // Debug log
+    return result; // Return response message
+  } catch (error) {
+    console.error('Error deleting document: ' + (error instanceof Error ? error.message : 'Unknown error'));
     throw error;
   }
 };

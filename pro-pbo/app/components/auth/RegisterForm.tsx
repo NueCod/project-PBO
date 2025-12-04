@@ -59,7 +59,14 @@ const RegisterForm = () => {
       // CARA LAIN: Hanya register, lalu arahkan ke halaman login.
       // Kita ikuti cara kedua dulu untuk kesederhanaan.
       alert('Registrasi berhasil! Silakan login.');
-      router.push('/login'); // Arahkan ke halaman login
+      // Redirect ke halaman login yang sesuai dengan role yang didaftarkan
+      if (formData.role === 'student') {
+        router.push('/login-student');
+      } else if (formData.role === 'company') {
+        router.push('/login-company');
+      } else {
+        router.push('/login');
+      }
     } catch (err) {
       console.error('Registration error:', err);
       setError((err as Error).message);
@@ -163,14 +170,21 @@ const RegisterForm = () => {
         <button
           type="submit"
           disabled={loading}
-          className={`bg-blue-600 text-white p-2 rounded w-full ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700 focus:ring-2 focus:outline-none focus:ring-blue-500'}`}
+          className={`bg-[#f59e0b] text-white p-2 rounded w-full ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#d97706] focus:ring-2 focus:outline-none focus:ring-[#f59e0b]'}`}
         >
           {loading ? 'Mendaftar...' : 'Daftar'}
         </button>
       </form>
-      <p className="mt-4 text-center">
-        Sudah punya akun? <Link href="/login" className="text-blue-600 hover:underline font-medium">Masuk di sini</Link>
-      </p>
+      <div className="mt-4 text-center">
+        <p>
+          Sudah punya akun? <Link href="/login" className="text-blue-600 hover:underline font-medium">Masuk di sini</Link>
+        </p>
+        <p className="mt-2">
+          <Link href="/login-student" className="text-blue-600 hover:underline font-medium">Login Mahasiswa</Link>
+          {' | '}
+          <Link href="/login-company" className="text-blue-600 hover:underline font-medium">Login Perusahaan</Link>
+        </p>
+      </div>
     </>
   );
 };

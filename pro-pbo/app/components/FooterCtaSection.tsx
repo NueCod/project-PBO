@@ -11,12 +11,12 @@ const FooterCtaSection = ({ darkMode }: SectionProps) => {
           Bergabunglah dengan ribuan mahasiswa dan perusahaan yang terhubung melalui InternSheep.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/login">
+          <Link href="/login-student">
             <button className="bg-white text-[#f59e0b] px-8 py-4 rounded-lg font-semibold hover:bg-[#f5f5f5] transition-colors">
               Bergabung sebagai Mahasiswa
             </button>
           </Link>
-          <Link href="/login">
+          <Link href="/login-company">
             <button className="border border-white text-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-[#f59e0b] transition-colors">
               Bergabung sebagai Perusahaan
             </button>

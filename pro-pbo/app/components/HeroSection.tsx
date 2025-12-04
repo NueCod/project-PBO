@@ -19,12 +19,12 @@ const HeroSection = ({ darkMode }: SectionProps) => {
             Platform lengkap dari pembuatan profil hingga manajemen lamaran dan seleksi.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/login">
+            <Link href="/login-student">
               <button className={`text-base md:text-lg bg-[#f59e0b] text-white px-6 py-3 sm:px-8 sm:py-4 rounded-lg font-semibold hover:bg-[#d97706] transition-colors`}>
                 Bergabung sebagai Mahasiswa
               </button>
             </Link>
-            <Link href="/login">
+            <Link href="/login-company">
               <button className={`text-base md:text-lg border px-6 py-3 sm:px-8 sm:py-4 rounded-lg font-semibold transition-colors ${darkMode ? 'border-gray-600 text-white hover:bg-white hover:text-[#f59e0b]' : 'border-[#0f0f0f] text-[#0f0f0f] hover:bg-[#0f0f0f] hover:text-white'}`}>
                 Bergabung sebagai Perusahaan
               </button>

@@ -49,7 +49,7 @@ const LoginForm = () => {
 
   return (
     <> {/* Gunakan Fragment untuk mengembalikan beberapa elemen tanpa div pembungkus */}
-      <h2 className="text-2xl font-bold mb-4 text-center">Masuk</h2> {/* Tambahkan text-center */}
+      <h2 className="text-2xl font-bold mb-4 text-center">Masuk Universal</h2> {/* Tambahkan text-center */}
       {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-center">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4"> {/* Tambahkan space-y-4 untuk jarak antar elemen form */}
         <div>
@@ -79,14 +79,21 @@ const LoginForm = () => {
         <button
           type="submit"
           disabled={loading}
-          className={`bg-blue-600 text-white p-2 rounded w-full ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700 focus:ring-2 focus:outline-none focus:ring-blue-500'}`} // Tambahkan hover dan focus styles
+          className={`bg-[#f59e0b] text-white p-2 rounded w-full ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#d97706] focus:ring-2 focus:outline-none focus:ring-[#f59e0b]'}`} // Tambahkan hover dan focus styles
         >
           {loading ? 'Memasuki...' : 'Masuk'}
         </button>
       </form>
-      <p className="mt-4 text-center">
-        Belum punya akun? <Link href="/register" className="text-blue-600 hover:underline font-medium">Daftar di sini</Link> {/* Tambahkan warna, hover, dan font */}
-      </p>
+      <div className="mt-4 text-center">
+        <p>
+          Belum punya akun? <Link href="/register" className="text-blue-600 hover:underline font-medium">Daftar di sini</Link>
+        </p>
+        <p className="mt-2">
+          <Link href="/login-student" className="text-blue-600 hover:underline font-medium">Login Mahasiswa</Link>
+          {' | '}
+          <Link href="/login-company" className="text-blue-600 hover:underline font-medium">Login Perusahaan</Link>
+        </p>
+      </div>
     </>
   );
 };

@@ -60,8 +60,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Additional application route for companies to update application status (accept/reject)
     Route::patch('/applications/{id}/status', [App\Http\Controllers\Api\ApplicationController::class, 'updateStatus']);
 
-    // Route::apiResource('documents', DocumentController::class);
+    // Document routes for students
+    Route::apiResource('documents', App\Http\Controllers\Api\DocumentController::class);
+    Route::get('/documents/{id}/serve', [App\Http\Controllers\Api\DocumentController::class, 'serve'])->name('documents.serve');
+
     // Route::get('/profile', [ProfileController::class, 'show']); // Bisa untuk student atau company tergantung role user
+
+    // Move the resume serve route inside the auth middleware group
+    Route::get('/applications/{id}/resume', [App\Http\Controllers\Api\ApplicationController::class, 'serveApplicationResume'])->name('applications.serveResume');
 });
 
 // Routes TANPA otentikasi - DITEMPATKAN SETELAH routes middleware group untuk mencegah konflik

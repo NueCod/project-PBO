@@ -30,6 +30,33 @@ const ManageInternshipsPage = () => {
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
+
+  // Fetch company profile
+  useEffect(() => {
+    const fetchCompanyProfile = async () => {
+      if (!token) {
+        console.warn('No token available, cannot fetch company profile');
+        return;
+      }
+
+      console.log('Fetching company profile with token:', token);
+      try {
+        const profile = await import('../../services/internshipService').then(mod => mod.getCompanyProfile);
+        const companyData = await profile(token);
+        console.log('Fetched company profile data:', companyData);
+        setCompanyProfile(companyData);
+      } catch (error) {
+        console.error('Error fetching company profile:', error);
+        // Use fallback if profile fetch fails
+      }
+    };
+
+    if (token) {
+      fetchCompanyProfile();
+    }
+  }, [token]);
+
   const [selectedInternship, setSelectedInternship] = useState<Internship | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingInternship, setEditingInternship] = useState<Internship | null>(null);
@@ -53,7 +80,7 @@ const ManageInternshipsPage = () => {
 
   useEffect(() => {
     // Check system preference for dark mode
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setDarkMode(true);
     }
   }, []);
@@ -222,7 +249,7 @@ const ManageInternshipsPage = () => {
 
   const handleCloseJob = async (id: string) => {
     // All data now is real data (no mock data), so we can proceed directly
-    if (window.confirm('Apakah Anda yakin ingin menutup lowongan ini? Lowongan tidak akan tampil lagi di pencarian.')) {
+    if (typeof window !== 'undefined' && window.confirm('Apakah Anda yakin ingin menutup lowongan ini? Lowongan tidak akan tampil lagi di pencarian.')) {
       try {
         await closeInternship(token!, id);
 
@@ -235,10 +262,14 @@ const ManageInternshipsPage = () => {
         }));
         setInternships(processedData);
 
-        alert('Lowongan berhasil ditutup');
+        if (typeof window !== 'undefined') {
+          alert('Lowongan berhasil ditutup');
+        }
       } catch (error) {
         console.error('Error closing internship:', error);
-        alert('Gagal menutup lowongan. Silakan coba lagi.');
+        if (typeof window !== 'undefined') {
+          alert('Gagal menutup lowongan. Silakan coba lagi.');
+        }
       }
     }
   };
@@ -502,9 +533,15 @@ const ManageInternshipsPage = () => {
                 </button>
                 <div className="flex items-center space-x-2">
                   <div className={`h-10 w-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center`}>
-                    <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>P</span>
+                    <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                      {companyProfile?.name
+                        ? companyProfile.name.charAt(0).toUpperCase()
+                        : user?.email?.charAt(0).toUpperCase() || 'C'}
+                    </span>
                   </div>
-                  <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>PT Maju Jaya</span>
+                  <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                    {companyProfile?.name || user?.email?.split('@')[0] || 'Perusahaan'}
+                  </span>
                 </div>
               </div>
             </div>

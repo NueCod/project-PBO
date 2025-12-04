@@ -5,19 +5,19 @@ export class DataService {
   static getFeatures(): Feature[] {
     return [
       {
-        title: "Verified Status",
-        description: "Clear differentiation between active students and fresh graduates",
-        features: ["Student verification", "Graduate validation", "Status transparency"]
+        title: "Integrated Recruitment Flow",
+        description: "Seamless recruitment process from application to hiring",
+        features: ["Unified Application Pipeline", "End to End Hiring Experience"]
       },
       {
         title: "Document Management",
         description: "Centralized storage for CV, transcripts, and portfolios",
-        features: ["Secure cloud storage", "PDF support", "Version control"]
+        features: ["Document Tagging", "Organized Folder"]
       },
       {
         title: "Application Tracking",
         description: "Transparency on application status at all times",
-        features: ["Real-time updates", "Status tracking", "Notification system"]
+        features: ["Real-time updates", "Status tracking"]
       }
     ];
   }

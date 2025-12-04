@@ -5,7 +5,7 @@ import { useAuth } from '../../../lib/authContext';
 import { getStudentProfile } from '../../../lib/apiService';
 import { useParams } from 'next/navigation';
 import Sidebar from '../../../components/Sidebar';
-import { getInternshipById, submitApplication } from '../../../services/internshipService'; // Import the service functions
+import { getInternshipById, submitApplication, getStudentDocuments } from '../../../services/internshipService'; // Import the service functions
 
 type InternshipApplication = {
   id: string; // Changed from number to string to match API
@@ -30,13 +30,15 @@ type InternshipApplication = {
 };
 
 type Document = {
-  id: number;
+  id: string; // Changed to string to match backend API
   name: string;
-  type: 'Resume' | 'Cover Letter' | 'Transcript' | 'Certificate' | 'Portfolio' | 'Other';
+  type: string; // Type from backend API
   size: string;
   uploadDate: string;
   description?: string;
   downloadUrl?: string;
+  fileUrl?: string;
+  fileType?: string;
 };
 
 type ApplicationFormData = {
@@ -92,7 +94,7 @@ const ApplicationFormPage = () => {
   });
   const [documents, setDocuments] = useState<File[]>([]);
   const [studentDocuments, setStudentDocuments] = useState<Document[]>([]);
-  const [selectedExistingDocs, setSelectedExistingDocs] = useState<number[]>([]); // IDs of selected existing docs
+  const [selectedExistingDocs, setSelectedExistingDocs] = useState<string[]>([]); // IDs of selected existing docs
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -137,12 +139,19 @@ const ApplicationFormPage = () => {
     }
   }, []);
 
-  // Fetch internship data from API
+  // Fetch internship and student documents data from API
   useEffect(() => {
-    const fetchInternship = async () => {
-      if (params?.id && token) {
-        try {
-          setLoading(true);
+    const fetchData = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        // Fetch internship data
+        if (params?.id) {
           const internshipId = Array.isArray(params.id) ? params.id[0] : params.id;
           const internshipData = await getInternshipById(internshipId);
 
@@ -151,66 +160,19 @@ const ApplicationFormPage = () => {
           } else {
             console.error('Internship not found');
           }
-        } catch (error) {
-          console.error('Error fetching internship:', error);
-        } finally {
-          setLoading(false);
         }
+
+        // Fetch student documents
+        const fetchedDocuments = await getStudentDocuments(token);
+        setStudentDocuments(fetchedDocuments);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
-    // In a real application, this would fetch student documents from an API
-    const mockStudentDocuments: Document[] = [
-      {
-        id: 1,
-        name: 'Curriculum Vitae.pdf',
-        type: 'Resume',
-        size: '2.4 MB',
-        uploadDate: '2024-10-15',
-        description: 'Resume terbaru untuk aplikasi magang',
-      },
-      {
-        id: 2,
-        name: 'Surat_Pendukung.pdf',
-        type: 'Cover Letter',
-        size: '1.2 MB',
-        uploadDate: '2024-10-16',
-        description: 'Surat lamaran untuk PT Teknologi Maju',
-      },
-      {
-        id: 3,
-        name: 'Transkrip_nilai.pdf',
-        type: 'Transcript',
-        size: '3.1 MB',
-        uploadDate: '2024-10-10',
-        description: 'Transkrip nilai semester 1-6',
-      },
-      {
-        id: 4,
-        name: 'Sertifikat_React.pdf',
-        type: 'Certificate',
-        size: '1.8 MB',
-        uploadDate: '2024-10-18',
-        description: 'Sertifikat React Fundamental',
-      },
-      {
-        id: 5,
-        name: 'Portfolio_2024.pdf',
-        type: 'Portfolio',
-        size: '5.7 MB',
-        uploadDate: '2024-10-20',
-        description: 'Portfolio terbaru 2024',
-      }
-    ];
-
-    setStudentDocuments(mockStudentDocuments);
-
-    // Fetch the internship data only if we have a token
-    if (token) {
-      fetchInternship();
-    } else {
-      setLoading(false);
-    }
+    fetchData();
   }, [params, token]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -243,7 +205,7 @@ const ApplicationFormPage = () => {
   };
 
   // Toggle selection of an existing document
-  const toggleDocumentSelection = (id: number) => {
+  const toggleDocumentSelection = (id: string) => {
     if (selectedExistingDocs.includes(id)) {
       // Remove from selection
       const newSelection = selectedExistingDocs.filter(docId => docId !== id);
@@ -735,21 +697,26 @@ const ApplicationFormPage = () => {
                     >
                       <div className="flex items-center">
                         <div className={`mr-3 text-xl ${
-                          doc.type === 'Resume' ? 'text-blue-500' :
-                          doc.type === 'Cover Letter' ? 'text-green-500' :
-                          doc.type === 'Transcript' ? 'text-purple-500' :
-                          doc.type === 'Certificate' ? 'text-yellow-500' :
-                          doc.type === 'Portfolio' ? 'text-indigo-500' : 'text-gray-500'
+                          doc.type.toUpperCase().includes('RESUME') ? 'text-blue-500' :
+                          doc.type.toUpperCase().includes('COVER') ? 'text-green-500' :
+                          doc.type.toUpperCase().includes('TRANSCRIPT') ? 'text-purple-500' :
+                          doc.type.toUpperCase().includes('CERTIFIC') ? 'text-yellow-500' :
+                          doc.type.toUpperCase().includes('PORTFOLIO') ? 'text-indigo-500' : 'text-gray-500'
                         }`}>
-                          {doc.type === 'Resume' ? '📄' :
-                           doc.type === 'Cover Letter' ? '✉️' :
-                           doc.type === 'Transcript' ? '🎓' :
-                           doc.type === 'Certificate' ? '🏆' :
-                           doc.type === 'Portfolio' ? '🖼️' : '📋'}
+                          {doc.type.toUpperCase().includes('RESUME') ? '📄' :
+                           doc.type.toUpperCase().includes('COVER') ? '✉️' :
+                           doc.type.toUpperCase().includes('TRANSCRIPT') ? '🎓' :
+                           doc.type.toUpperCase().includes('CERTIFIC') ? '🏆' :
+                           doc.type.toUpperCase().includes('PORTFOLIO') ? '🖼️' : '📋'}
                         </div>
                         <div className="flex-1">
                           <p className={`font-medium truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>{doc.name}</p>
-                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{doc.type}</p>
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{doc.type.toUpperCase().includes('RESUME') ? 'Resume' :
+                           doc.type.toUpperCase().includes('COVER') ? 'Cover Letter' :
+                           doc.type.toUpperCase().includes('TRANSCRIPT') ? 'Transcript' :
+                           doc.type.toUpperCase().includes('CERTIFIC') ? 'Certificate' :
+                           doc.type.toUpperCase().includes('PORTFOLIO') ? 'Portfolio' :
+                           'Other'}</p>
                         </div>
                         <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
                           selectedExistingDocs.includes(doc.id)

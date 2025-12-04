@@ -16,17 +16,21 @@ const UserTypesSection = ({ darkMode }: SectionProps) => {
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {userFlows.map((user, index) => (
+          {userFlows.map((user, index) => {
+            // Determine the login path based on the user type
+            const loginPath = user.name === 'Mahasiswa' ? '/login-student' : '/login-company';
+            return (
             <div key={index} className={`p-10 rounded-lg border text-center ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-[#e5e7eb]'}`}>
               <h3 className={`text-3xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-[#0f0f0f]'}`}>{user.name}</h3>
               <p className={`mb-8 text-lg ${darkMode ? 'text-gray-300' : 'text-[#737373]'}`}>{user.description}</p>
-              <Link href="/login">
+              <Link href={loginPath}>
                 <button className="bg-[#f59e0b] text-white px-8 py-4 rounded-lg font-semibold hover:bg-[#d97706] transition-colors">
                   Bergabung sebagai {user.name}
                 </button>
               </Link>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

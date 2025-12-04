@@ -46,7 +46,7 @@ class ApplicationController extends Controller
 
             // Get applications with job details
             $applications = $studentProfile->applications()
-                ->with(['job', 'job.companyProfile'])
+                ->with(['job', 'job.companyProfile', 'resume'])
                 ->get();
 
             // Format the applications for the frontend
@@ -79,7 +79,11 @@ class ApplicationController extends Controller
                     'interview_notes' => $application->interview_notes,
                     'attendance_confirmed' => $application->attendance_confirmed,
                     'attendance_confirmed_at' => $application->attendance_confirmed_at,
-                    'attendance_confirmation_method' => $application->attendance_confirmation_method
+                    'attendance_confirmation_method' => $application->attendance_confirmation_method,
+                    'resume_id' => $application->resume_id,
+                    'resume_name' => $application->resume ? $application->resume->title : ($application->resume_id ? 'Resume Dokumen Tidak Ditemukan' : null),
+                    'resume_type' => $application->resume ? $application->resume->file_type : null,
+                    'resume_url' => $application->resume ? url('storage/' . $application->resume->file_url) : null
                 ];
             });
 
@@ -248,7 +252,7 @@ class ApplicationController extends Controller
             // Find the application that belongs to this student
             $application = Application::where('id', $id)
                 ->where('student_id', $studentProfile->id)
-                ->with(['job', 'job.companyProfile'])
+                ->with(['job', 'job.companyProfile', 'resume'])
                 ->first();
 
             if (!$application) {
@@ -279,7 +283,11 @@ class ApplicationController extends Controller
                 'portfolio_url' => $application->portfolio_url ?? '',
                 'availability' => $application->availability ?? '',
                 'expected_duration' => $application->expected_duration ?? '',
-                'additional_info' => $application->additional_info ?? ''
+                'additional_info' => $application->additional_info ?? '',
+                'resume_id' => $application->resume_id,
+                'resume_name' => $application->resume ? $application->resume->title : ($application->resume_id ? 'Resume Dokumen Tidak Ditemukan' : null),
+                'resume_type' => $application->resume ? $application->resume->file_type : null,
+                'resume_url' => $application->resume ? url('storage/' . $application->resume->file_url) : null
             ];
 
             return response()->json([
@@ -450,14 +458,22 @@ class ApplicationController extends Controller
 
             // Get applications for those jobs
             $applications = Application::whereIn('job_id', $companyJobs)
-                ->with(['studentProfile.user', 'job']) // Include student and job info
+                ->with(['studentProfile.user', 'job', 'resume']) // Include student, job, and resume info
                 ->get();
+
+            // Log the count of applications being returned for debugging
+            \Log::info('Returning ' . $applications->count() . ' applications for company');
 
             // Format the applications for the frontend
             $formattedApplications = $applications->map(function ($application) {
                 $studentProfile = $application->studentProfile;
                 $job = $application->job;
                 $student = $studentProfile->user; // Get the student user account
+
+                // Log specific application data if it has interview scheduled
+                if ($application->interview_date) {
+                    \Log::info('Application with interview: ' . $application->id . ' status: ' . $application->status . ' date: ' . $application->interview_date);
+                }
 
                 return [
                     'id' => $application->id,
@@ -485,6 +501,10 @@ class ApplicationController extends Controller
                     'attendance_confirmed' => $application->attendance_confirmed,
                     'attendance_confirmed_at' => $application->attendance_confirmed_at,
                     'attendance_confirmation_method' => $application->attendance_confirmation_method,
+                    'resume_id' => $application->resume_id,
+                    'resume_name' => $application->resume ? $application->resume->title : ($application->resume_id ? 'Resume Dokumen Tidak Ditemukan' : null),
+                    'resume_type' => $application->resume ? $application->resume->file_type : null,
+                    'resume_url' => $application->resume ? url('storage/' . $application->resume->file_url) : null,
                 ];
             });
 
@@ -558,16 +578,40 @@ class ApplicationController extends Controller
                 'interview_notes' => 'nullable|string',
             ]);
 
-            // Update interview schedule fields individually to ensure all changes are saved to the database
-            $application->interview_date = $request->interview_date;
-            $application->interview_time = $request->interview_time;
-            $application->interview_method = $request->interview_method;
-            $application->interview_location = $request->interview_location ?? null;
-            $application->interview_notes = $request->interview_notes ?? null;
-            $application->status = 'interview'; // Update status to 'interview' to indicate that an interview has been scheduled
+            \DB::transaction(function () use ($request, $application, $id) {
+                // Update interview schedule fields individually to ensure all changes are saved to the database
+                $application->interview_date = $request->interview_date;
+                $application->interview_time = $request->interview_time;
+                $application->interview_method = $request->interview_method;
+                $application->interview_location = $request->interview_location ?? null;
+                $application->interview_notes = $request->interview_notes ?? null;
+                $application->status = 'interview'; // Update status to 'interview' to indicate that an interview has been scheduled
 
-            // Explicitly save the changes to database
-            $application->save();
+                // Log the values before saving for debugging
+                \Log::info('Setting interview schedule for application: ' . $id . ' with data: ' . json_encode([
+                    'interview_date' => $request->interview_date,
+                    'interview_time' => $request->interview_time,
+                    'interview_method' => $request->interview_method,
+                    'interview_location' => $request->interview_location,
+                    'interview_notes' => $request->interview_notes,
+                    'status' => 'interview'
+                ]));
+
+                // Explicitly save the changes to database
+                $application->save();
+
+                // Log the saved values for verification
+                \Log::info('Saved application data: ' . json_encode([
+                    'id' => $application->id,
+                    'status' => $application->status,
+                    'interview_date' => $application->interview_date,
+                    'interview_time' => $application->interview_time,
+                    'interview_method' => $application->interview_method
+                ]));
+            });
+
+            // Refresh the application instance to make sure we have latest data
+            $application->refresh();
 
             return response()->json([
                 'success' => true,
@@ -710,11 +754,18 @@ class ApplicationController extends Controller
                 'feedback_note' => 'nullable|string'
             ]);
 
-            // Update application status and feedback note
-            $application->update([
-                'status' => $request->status,
-                'feedback_note' => $request->feedback_note ?? $application->feedback_note
-            ]);
+            \DB::transaction(function () use ($request, $application) {
+                // Update application status and feedback note individually to ensure changes are saved to database
+                $application->status = $request->status;
+                $application->feedback_note = $request->feedback_note ?? $application->feedback_note;
+                $application->save();
+
+                // Log the update for debugging
+                \Log::info('Updated application status: ' . $application->id . ' to status: ' . $application->status);
+            });
+
+            // Refresh to get latest data
+            $application->refresh();
 
             return response()->json([
                 'success' => true,
@@ -727,6 +778,153 @@ class ApplicationController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update application status: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Serve the resume document for an application
+     *
+     * @param string $id Application ID
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse
+     */
+    public function serveApplicationResume(string $id)
+    {
+        try {
+            // Log incoming request
+            \Log::info('Serve application resume request - Application ID: ' . $id);
+
+            $user = Auth::user();
+
+            if (!$user) {
+                \Log::warning('Unauthorized access attempt to serve resume');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized access'
+                ], 401);
+            }
+
+            $application = null;
+
+            if ($user->role === 'company') {
+                \Log::info('Company user attempting to access resume - User ID: ' . $user->id);
+
+                // Company accessing application from their posted jobs
+                $companyProfile = $user->companyProfile;
+                if (!$companyProfile) {
+                    \Log::warning('Company profile not found for user: ' . $user->id);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Company profile not found'
+                    ], 404);
+                }
+
+                // Get jobs posted by this company
+                $companyJobs = $companyProfile->jobs()->pluck('id');
+                \Log::info('Company has ' . $companyJobs->count() . ' jobs posted');
+
+                // Find the application for one of their jobs
+                $application = Application::whereIn('job_id', $companyJobs)
+                    ->where('id', $id)
+                    ->with('resume') // Load the resume relationship
+                    ->first();
+            } elseif ($user->role === 'student') {
+                \Log::info('Student user attempting to access resume - User ID: ' . $user->id);
+
+                // Student accessing their own application
+                $studentProfile = $user->studentProfile;
+                if (!$studentProfile) {
+                    \Log::warning('Student profile not found for user: ' . $user->id);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Student profile not found'
+                    ], 404);
+                }
+
+                $application = Application::where('student_id', $studentProfile->id)
+                    ->where('id', $id)
+                    ->with('resume') // Load the resume relationship
+                    ->first();
+            } else {
+                \Log::warning('Invalid role attempting to access resume: ' . $user->role);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied'
+                ], 403);
+            }
+
+            if (!$application) {
+                \Log::warning('Application not found or access denied - ID: ' . $id);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Application not found or access denied'
+                ], 404);
+            }
+
+            // Check if application has a resume
+            if (!$application->resume) {
+                \Log::warning('Resume not found for application ID: ' . $id);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Resume not found for this application'
+                ], 404);
+            }
+
+            // Log the resume file details
+            \Log::info('Resume file found - Path: ' . $application->resume->file_url . ', Type: ' . ($application->resume->file_type ?? 'unknown'));
+
+            // Debug: Log the resume details
+            \Log::info('Resume details - ID: ' . $application->resume->id . ', Path: ' . $application->resume->file_url . ', Type: ' . $application->resume->file_type);
+
+            // Check if file exists in the public storage disk
+            $fileExists = \Storage::disk('public')->exists($application->resume->file_url);
+
+            if (!$fileExists) {
+                \Log::warning('File does not exist in public disk at path: ' . $application->resume->file_url . ' for application ID: ' . $id);
+
+                // Get list of actual files in the document location to debug
+                $expectedDir = dirname($application->resume->file_url);
+                if ($expectedDir && \Storage::disk('public')->exists($expectedDir)) {
+                    $filesInDir = \Storage::disk('public')->files($expectedDir);
+                    \Log::info('Files in expected directory "' . $expectedDir . '": ' . implode(', ', $filesInDir));
+                } else {
+                    \Log::warning('Expected directory "' . $expectedDir . '" does not exist in public disk');
+                }
+
+                // Update the application record to clear the resume_id pointing to missing file
+                $application->resume_id = null;
+                $application->save();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Resume file has been removed or is unavailable'
+                ], 404);
+            }
+
+            // Stream the file content directly from the public disk
+            try {
+                $fileContents = \Storage::disk('public')->get($application->resume->file_url);
+                $mimeType = \Storage::disk('public')->mimeType($application->resume->file_url) ?: 'application/octet-stream';
+
+                // Create a response with the file content
+                $response = response($fileContents);
+                $response->header('Content-Type', $mimeType);
+                $response->header('Content-Disposition', 'inline; filename="' . basename($application->resume->file_url) . '"');
+
+                return $response;
+            } catch (\Exception $e) {
+                \Log::error('Error reading file content: ' . $e->getMessage());
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error reading file content: ' . $e->getMessage()
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to serve application resume: ' . $e->getMessage() . ' on line ' . $e->getLine());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to serve resume: ' . $e->getMessage()
             ], 500);
         }
     }

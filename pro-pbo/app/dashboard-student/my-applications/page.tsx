@@ -6,7 +6,7 @@ import { getStudentProfile } from '../../lib/apiService';
 import { getStudentApplications } from '../../services/internshipService';
 import Sidebar from '../../components/Sidebar';
 
-type ApplicationStatus = 'Submitted' | 'Reviewed' | 'Interview' | 'Accepted' | 'Rejected';
+type ApplicationStatus = 'Applied' | 'Reviewed' | 'Interview' | 'Accepted' | 'Rejected';
 type Application = {
   id: string; // Changed to string to match backend API
   title: string;
@@ -114,7 +114,7 @@ const MyApplicationsPage = () => {
   // Function to get status color classes
   const getStatusColor = (status: ApplicationStatus) => {
     switch(status) {
-      case 'Submitted':
+      case 'Applied':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
       case 'Reviewed':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
@@ -129,15 +129,21 @@ const MyApplicationsPage = () => {
     }
   };
 
-  // Function to get status message based on status
+  // Function to get the display status for UI - simplified for direct accept/reject workflow
+  const getDisplayStatus = (appStatus: ApplicationStatus) => {
+    // For the simplified workflow, we just return the application status as is
+    return appStatus;
+  };
+
+  // Function to get status message based on status for simplified workflow
   const getStatusMessage = (status: ApplicationStatus) => {
     switch(status) {
-      case 'Submitted':
+      case 'Applied':
         return 'Lamaran telah dikirim, dalam proses review';
       case 'Reviewed':
         return 'Lamaran sedang direview oleh perusahaan';
       case 'Interview':
-        return 'Lamaran Anda lolos seleksi, silakan hadiri wawancara sesuai jadwal';
+        return 'Status wawancara - aplikasi ini menggunakan alur lama';
       case 'Accepted':
         return 'Lamaran Anda diterima! Selamat!';
       case 'Rejected':
@@ -274,8 +280,8 @@ const MyApplicationsPage = () => {
                     Semua
                   </button>
                   <button
-                    onClick={() => setStatusFilter('Submitted')}
-                    className={`px-4 py-2 rounded-lg ${statusFilter === 'Submitted' ? (darkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}`}
+                    onClick={() => setStatusFilter('Applied')}
+                    className={`px-4 py-2 rounded-lg ${statusFilter === 'Applied' ? (darkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}`}
                   >
                     Dikirim
                   </button>
@@ -343,18 +349,18 @@ const MyApplicationsPage = () => {
                   <div
                     key={app.id}
                     className={`rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'} border-l-4 ${
-                      app.status === 'Submitted' ? 'border-blue-500' :
-                      app.status === 'Reviewed' ? 'border-yellow-500' :
-                      app.status === 'Interview' ? 'border-purple-500' :
-                      app.status === 'Accepted' ? 'border-green-500' : 'border-red-500'
+                      getDisplayStatus(app.status) === 'Submitted' ? 'border-blue-500' :
+                      getDisplayStatus(app.status) === 'Reviewed' ? 'border-yellow-500' :
+                      getDisplayStatus(app.status) === 'Interview' ? 'border-purple-500' :
+                      getDisplayStatus(app.status) === 'Accepted' ? 'border-green-500' : 'border-red-500'
                     }`}
                   >
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between">
                       <div className="flex-1">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2">
                           <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{app.title}</h3>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium mt-1 md:mt-0 ${getStatusColor(app.status)}`}>
-                            {app.status}
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium mt-1 md:mt-0 ${getStatusColor(getDisplayStatus(app.status))}`}>
+                            {getDisplayStatus(app.status)}
                           </span>
                         </div>
 
@@ -392,45 +398,28 @@ const MyApplicationsPage = () => {
                           </div>
                         </div>
 
-                        {getStatusMessage(app.status) && (
+                        {getStatusMessage(getDisplayStatus(app.status)) && (
                           <div className={`mt-3 p-3 rounded-lg ${
-                            app.status === 'Accepted'
+                            getDisplayStatus(app.status) === 'Accepted'
                               ? `${darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'} border`
-                              : app.status === 'Rejected'
+                              : getDisplayStatus(app.status) === 'Rejected'
                                 ? `${darkMode ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'} border`
                                 : `${darkMode ? 'bg-yellow-900/20 border-yellow-800' : 'bg-yellow-50 border-yellow-200'} border`
                           }`}>
-                            <p className={`text-sm ${app.status === 'Accepted' ? 'text-green-600 dark:text-green-400' : app.status === 'Rejected' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                              {getStatusMessage(app.status)}
+                            <p className={`text-sm ${getDisplayStatus(app.status) === 'Accepted' ? 'text-green-600 dark:text-green-400' : getDisplayStatus(app.status) === 'Rejected' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                              {getStatusMessage(getDisplayStatus(app.status))}
                             </p>
                           </div>
                         )}
                       </div>
 
                       <div className="ml-0 md:ml-4 mt-4 md:mt-0 flex flex-col space-y-2">
-                        {app.interview_date ? (
-                          <>
-                            <button
-                              className={`${darkMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-500 hover:bg-purple-600'} text-white px-4 py-2 rounded-lg`}
-                              onClick={() => showInterviewDetails(app)}
-                            >
-                              {app.status === 'Interview' ? 'Detail Wawancara' : 'Jadwal Wawancara'}
-                            </button>
-                            <button
-                              className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'} px-4 py-2 rounded-lg`}
-                              onClick={() => showApplicationDetail(app)}
-                            >
-                              Detail
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'} px-4 py-2 rounded-lg`}
-                            onClick={() => showApplicationDetail(app)}
-                          >
-                            Detail
-                          </button>
-                        )}
+                        <button
+                          className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'} px-4 py-2 rounded-lg`}
+                          onClick={() => showApplicationDetail(app)}
+                        >
+                          Detail
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -565,6 +554,57 @@ const MyApplicationsPage = () => {
                                   }
                                 : app
                             ));
+
+                            // After a brief delay, refresh data from server to ensure consistency
+                            setTimeout(async () => {
+                              // Refresh applications data after confirmation
+                              if (token) {
+                                try {
+                                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/applications`, {
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                      'Content-Type': 'application/json',
+                                    },
+                                  });
+
+                                  if (response.ok) {
+                                    const result = await response.json();
+                                    if (result.success && result.data) {
+                                      const mappedApplications = result.data.map((app: any) => ({
+                                        id: app.id,
+                                        title: app.title,
+                                        company: app.company || app.job?.companyProfile?.company_name || 'Unknown Company',
+                                        position: app.position || app.title,
+                                        appliedDate: app.appliedDate || app.applied_date || (app.created_at ? (typeof app.created_at === 'string' ? app.created_at : app.created_at.format('Y-m-d')) : ''),
+                                        status: app.status || 'Applied',
+                                        deadline: app.deadline || (app.job?.closing_date ? (typeof app.job.closing_date === 'string' ? app.job.closing_date : app.job.closing_date.format('Y-m-d')) : ''),
+                                        description: app.description || app.job?.description || '',
+                                        requirements: app.requirements || (app.job?.requirements ? JSON.parse(app.job.requirements).majors || [] : []),
+                                        statusDate: app.statusDate || app.status_date || (app.updated_at ? (typeof app.updated_at === 'string' ? app.updated_at : app.updated_at.format('Y-m-d')) : ''),
+                                        notes: app.notes || '',
+                                        cover_letter: app.cover_letter || '',
+                                        portfolio_url: app.portfolio_url || '',
+                                        availability: app.availability || '',
+                                        expected_duration: app.expected_duration || '',
+                                        additional_info: app.additional_info || '',
+                                        interview_date: app.interview_date || null,
+                                        interview_time: app.interview_time || null,
+                                        interview_method: app.interview_method || null,
+                                        interview_location: app.interview_location || null,
+                                        interview_notes: app.interview_notes || null,
+                                        attendance_confirmed: app.attendance_confirmed || false,
+                                        attendance_confirmed_at: app.attendance_confirmed_at || null,
+                                        attendance_confirmation_method: app.attendance_confirmation_method || null,
+                                      }));
+
+                                      setApplications(mappedApplications);
+                                    }
+                                  }
+                                } catch (error) {
+                                  console.error('Error refreshing applications after attendance confirmation:', error);
+                                }
+                              }
+                            }, 500); // Delay to ensure DB transaction completes
                           } else {
                             alert(`Gagal mengkonfirmasi kehadiran: ${result.message || 'Terjadi kesalahan'}`);
                           }
@@ -617,13 +657,13 @@ const MyApplicationsPage = () => {
                           : `${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`
                     }`}>
                       <p className={`text-sm ${
-                        selectedDetailApplication.status === 'Accepted'
+                        getDisplayStatus(selectedDetailApplication.status) === 'Accepted'
                           ? `${darkMode ? 'text-green-400' : 'text-green-700'} font-semibold`
-                          : selectedDetailApplication.status === 'Rejected'
+                          : getDisplayStatus(selectedDetailApplication.status) === 'Rejected'
                             ? `${darkMode ? 'text-red-400' : 'text-red-700'} font-semibold`
                             : `${darkMode ? 'text-gray-300' : 'text-gray-700'}`
                       }`}>
-                        Status: {selectedDetailApplication.status}
+                        Status: {getDisplayStatus(selectedDetailApplication.status)}
                       </p>
                       <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tanggal Lamar: {selectedDetailApplication.appliedDate}</p>
                       <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tanggal Status: {selectedDetailApplication.statusDate}</p>

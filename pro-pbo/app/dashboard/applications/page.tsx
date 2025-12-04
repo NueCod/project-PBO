@@ -43,11 +43,17 @@ type Application = {
   attendance_confirmed?: boolean;
   attendance_confirmed_at?: string;
   attendance_confirmation_method?: string;
+  resume_id?: string; // ID of the resume document used in this application
+  resume_name?: string; // Name of the resume document
+  resume_type?: string; // Type of the resume document
+  resume_size?: string; // Size of the resume document
+  resume_url?: string; // URL to download the resume document
 };
 
 const CompanyApplicationsPage = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | 'All'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [applications, setApplications] = useState<Application[]>([]);
@@ -57,6 +63,8 @@ const CompanyApplicationsPage = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState<{id: string, status: ApplicationStatus} | null>(null);
   const [showInterviewScheduleModal, setShowInterviewScheduleModal] = useState(false);
+  const [localApplicationOverrides, setLocalApplicationOverrides] = useState<Record<string, Partial<Application>>>({});
+  const [interviewScheduledApplications, setInterviewScheduledApplications] = useState<Set<string>>(new Set());
   const [interviewSchedule, setInterviewSchedule] = useState({
     date: '',
     time: '',
@@ -68,15 +76,41 @@ const CompanyApplicationsPage = () => {
   // Ensure interviewSchedule always has proper default values
   useEffect(() => {
     setInterviewSchedule(prev => ({
-      date: prev.date ?? '',
-      time: prev.time ?? '',
-      method: prev.method ?? 'online',
-      location: prev.location ?? '',
-      notes: prev.notes ?? ''
+      ...prev,
+      date: prev.date || '',
+      time: prev.time || '',
+      method: prev.method || 'online',
+      location: prev.location || '',
+      notes: prev.notes || ''
     }));
   }, []);
 
-  const { token } = useAuth(); // Get the authentication token
+  const { user, token } = useAuth(); // Get the user and token from authentication context
+
+  // Fetch company profile
+  useEffect(() => {
+    const fetchCompanyProfile = async () => {
+      if (!token) {
+        console.warn('No token available, cannot fetch company profile');
+        return;
+      }
+
+      console.log('Fetching company profile with token:', token);
+      try {
+        const profile = await import('../../services/internshipService').then(mod => mod.getCompanyProfile);
+        const companyData = await profile(token);
+        console.log('Fetched company profile data:', companyData);
+        setCompanyProfile(companyData);
+      } catch (error) {
+        console.error('Error fetching company profile:', error);
+        // Use fallback if profile fetch fails
+      }
+    };
+
+    if (token) {
+      fetchCompanyProfile();
+    }
+  }, [token]);
 
   useEffect(() => {
     // Check system preference for dark mode
@@ -143,7 +177,7 @@ const CompanyApplicationsPage = () => {
 
         if (result.success && result.data) {
           // Map the API response to the format expected by the UI
-          const mappedApplications = result.data.map((app: any) => ({
+          const serverApplications = result.data.map((app: any) => ({
             id: app.id,
             job_id: app.job_id,
             job_title: app.job_title || app.title,
@@ -177,9 +211,26 @@ const CompanyApplicationsPage = () => {
             attendance_confirmed: app.attendance_confirmed || false,
             attendance_confirmed_at: app.attendance_confirmed_at || null,
             attendance_confirmation_method: app.attendance_confirmation_method || null,
+            resume_id: app.resume_id,
+            resume_name: app.resume_name || (app.resume?.title ? app.resume.title : null),
+            resume_type: app.resume_type || (app.resume?.file_type ? app.resume.file_type : null),
+            resume_size: app.resume_size || (app.resume?.size ? app.resume.size : null),
+            resume_url: app.resume_url || (app.resume?.file_url ? app.resume.file_url : null),
           }));
 
-          setApplications(mappedApplications);
+          // Apply local overrides to server data
+          setApplications(prev => {
+            return serverApplications.map(serverApp => {
+              // Check if there's a local override for this application
+              const localOverride = localApplicationOverrides[serverApp.id];
+              if (localOverride) {
+                // Apply the local override to the server data
+                return { ...serverApp, ...localOverride };
+              }
+              // For applications without local overrides, use server data
+              return serverApp;
+            });
+          });
         } else {
           console.error('Failed to fetch applications:', result.message || 'Unknown error');
           setApplications([]);
@@ -216,10 +267,6 @@ const CompanyApplicationsPage = () => {
     switch(status) {
       case 'Applied':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300';
-      case 'Reviewed':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300';
-      case 'Interview':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300';
       case 'Accepted':
         return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
       case 'Rejected':
@@ -229,35 +276,25 @@ const CompanyApplicationsPage = () => {
     }
   };
 
-  // Function to get the display status for UI
-  const getDisplayStatus = (appStatus: ApplicationStatus, hasInterviewScheduled: boolean) => {
-    // If the application has already been accepted/rejected, show the actual status
-    if (appStatus === 'Accepted' || appStatus === 'Rejected') {
-      return appStatus;
-    }
-    // If interview is scheduled and not yet accepted/rejected, show as 'Interview'
-    return hasInterviewScheduled ? 'Interview' : appStatus;
+  // Function to get the display status for UI - simplified for direct accept/reject workflow
+  const getDisplayStatus = (appStatus: ApplicationStatus) => {
+    // For the simplified workflow, we just return the application status as is
+    return appStatus;
   };
 
-  // Function to get status action text
-  // Enhanced to consider actual interview scheduling
-  const getStatusAction = (status: ApplicationStatus, hasInterviewScheduled?: boolean) => {
-    // If an interview is scheduled but not yet accepted/rejected, show 'Accept/Reject'
-    if (hasInterviewScheduled && status !== 'Accepted' && status !== 'Rejected') {
-      return 'Accept/Reject';
-    }
-
+  // Function to get status action text for simplified workflow
+  const getStatusAction = (status: ApplicationStatus, hasInterviewScheduled?: boolean, appId?: string) => {
     switch(status) {
       case 'Applied':
         return 'Review';
       case 'Reviewed':
-        return 'Interview';
+        return 'Review';
       case 'Interview':
-        return 'Accept/Reject';
+        return 'Review';
       case 'Accepted':
         return 'Contact';
       case 'Rejected':
-        return 'Details';
+        return 'Detail';
       default:
         return 'Action';
     }
@@ -268,36 +305,11 @@ const CompanyApplicationsPage = () => {
     setShowApplicantProfile(true);
   };
 
-  // Function to handle status change with modal
-  // Enhanced to consider if interview is already scheduled
+  // Function to handle status change - simplified to just open review modal
   const handleStatusChange = (id: string, currentStatus: ApplicationStatus, hasInterviewScheduled?: boolean) => {
-    // If an interview is already scheduled, don't open the review modal for scheduling
-    if (hasInterviewScheduled) {
-      // Do nothing - accept/reject buttons are shown separately for scheduled interviews
-      return;
-    }
-
-    // If current status is 'Applied', we want to move to 'Reviewed'
-    if (currentStatus === 'Applied') {
-      setSelectedApplication({ id, status: currentStatus });
-      setShowReviewModal(true); // Show the review modal
-    }
-    // If current status is 'Reviewed', we want to schedule an interview
-    else if (currentStatus === 'Reviewed') {
-      setSelectedApplication({ id, status: currentStatus });
-      setShowReviewModal(true); // Show the review modal which has interview scheduling
-    }
-    // For 'Interview' status, do nothing as accept/reject buttons are shown separately
-    else if (currentStatus === 'Interview') {
-      // Do nothing - accept/reject functionality is handled separately
-    }
-    // For other statuses, handle as needed
-    else {
-      // For other transitions, keep the direct approach
-      setApplications(prev => prev.map(app =>
-        app.id === id ? { ...app, status: getNextStatus(currentStatus), statusDate: new Date().toISOString().split('T')[0] } : app
-      ));
-    }
+    // Show review modal for the application
+    setSelectedApplication({ id, status: currentStatus });
+    setShowReviewModal(true);
   };
 
   // Helper function to get next status
@@ -316,13 +328,13 @@ const CompanyApplicationsPage = () => {
       // If decision is to proceed to interview, show schedule modal
       if (decision === 'interview') {
         // Reset interview schedule form to default values before opening modal
-        setInterviewSchedule({
-          date: '',
-          time: '',
-          method: 'online',
-          location: '',
-          notes: ''
-        });
+        setInterviewSchedule(prev => ({
+          date: prev.date || '',
+          time: prev.time || '',
+          method: prev.method || 'online',
+          location: prev.location || '',
+          notes: prev.notes || ''
+        }));
         setShowReviewModal(false); // Close review modal
         setShowInterviewScheduleModal(true); // Show interview schedule modal
       } else {
@@ -352,6 +364,8 @@ const CompanyApplicationsPage = () => {
           interview_notes: interviewSchedule.notes,
         });
 
+        console.log('Interview schedule result:', result);
+
         // Create a new array with updated application to force re-render
         setApplications(prev => {
           const updatedApplications = prev.map(app =>
@@ -365,6 +379,9 @@ const CompanyApplicationsPage = () => {
                   interview_method: result?.interview_method || interviewSchedule.method,
                   interview_location: result?.interview_location || (interviewSchedule.method === 'offline' ? interviewSchedule.location : null),
                   interview_notes: result?.interview_notes || interviewSchedule.notes,
+                  attendance_confirmed: app.attendance_confirmed || false,
+                  attendance_confirmed_at: app.attendance_confirmed_at || null,
+                  attendance_confirmation_method: app.attendance_confirmation_method || null,
                 }
               : app
           );
@@ -374,73 +391,114 @@ const CompanyApplicationsPage = () => {
         });
 
         // Reset schedule form and close modal
-        setInterviewSchedule({
-          date: '',
-          time: '',
-          method: 'online',
-          location: '',
-          notes: ''
-        });
+        setInterviewSchedule(prev => ({
+          date: prev.date || '',
+          time: prev.time || '',
+          method: prev.method || 'online',
+          location: prev.location || '',
+          notes: prev.notes || ''
+        }));
         setShowInterviewScheduleModal(false);
         setSelectedApplication(null);
 
-        // After a brief delay, refresh data from server to ensure consistency
-        // This ensures the updated status is correctly reflected after page navigation
-        setTimeout(async () => {
-          // Refresh applications data after interview scheduling
-          if (token) {
-            try {
-              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/company/applications`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-
-              if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.data) {
-                  const mappedApplications = result.data.map((app: any) => ({
-                    id: app.id,
-                    job_id: app.job_id,
-                    job_title: app.job_title || app.title,
-                    student_id: app.student_id,
-                    student_name: app.student_name || app.studentName,
-                    student_email: app.student_email || app.studentEmail,
-                    applied_date: app.applied_date || app.appliedDate,
-                    status: app.status || 'Applied',
-                    feedback_note: app.feedback_note,
-                    location: app.location,
-                    job_type: app.job_type,
-                    description: app.description,
-                    studentUniversity: app.studentUniversity || '',
-                    studentMajor: app.studentMajor || '',
-                    studentSkills: app.studentSkills || [],
-                    requirements: app.requirements || [],
-                    cover_letter: app.cover_letter,
-                    portfolio_url: app.portfolio_url,
-                    availability: app.availability,
-                    expected_duration: app.expected_duration,
-                    additional_info: app.additional_info,
-                    statusDate: app.statusDate || app.updated_at || app.applied_date || app.appliedDate,
-                    company: app.company,
-                    position: app.position,
-                    deadline: app.deadline,
-                    interview_date: app.interview_date || null,
-                    interview_time: app.interview_time || null,
-                    interview_method: app.interview_method || null,
-                    interview_location: app.interview_location || null,
-                    interview_notes: app.interview_notes || null,
-                  }));
-
-                  setApplications(mappedApplications);
-                }
-              }
-            } catch (error) {
-              console.error('Error refreshing applications after scheduling:', error);
-            }
+        // Store local override for this application to ensure it keeps the correct status and interview details
+        setLocalApplicationOverrides(prev => ({
+          ...prev,
+          [id]: {
+            status: 'Interview',
+            statusDate: new Date().toISOString().split('T')[0],
+            interview_date: result?.interview_date || interviewSchedule.date,
+            interview_time: result?.interview_time || interviewSchedule.time,
+            interview_method: result?.interview_method || interviewSchedule.method,
+            interview_location: result?.interview_location || (interviewSchedule.method === 'offline' ? interviewSchedule.location : null),
+            interview_notes: result?.interview_notes || interviewSchedule.notes,
+            attendance_confirmed: false,
+            attendance_confirmed_at: null,
+            attendance_confirmation_method: null
           }
-        }, 500); // Longer delay to ensure DB transaction completes
+        }));
+
+        // Mark this application as having an interview scheduled to ensure it always displays as 'Interview'
+        setInterviewScheduledApplications(prev => {
+          const newSet = new Set(prev);
+          newSet.add(id);
+          return newSet;
+        });
+
+        // Clear the local override after 30 seconds to allow for server updates (e.g. if student confirms attendance)
+        setTimeout(() => {
+          setLocalApplicationOverrides(prev => {
+            const newOverrides = { ...prev };
+            delete newOverrides[id];
+            return newOverrides;
+          });
+        }, 30000);
+
+        // Fetch fresh data to ensure consistency after scheduling
+        if (token) {
+          try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/company/applications`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.data) {
+                const freshApplications = result.data.map((app: any) => ({
+                  id: app.id,
+                  job_id: app.job_id,
+                  job_title: app.job_title || app.title,
+                  student_id: app.student_id,
+                  student_name: app.student_name || app.studentName,
+                  student_email: app.student_email || app.studentEmail,
+                  applied_date: app.applied_date || app.appliedDate,
+                  status: app.status || 'Applied',
+                  feedback_note: app.feedback_note,
+                  location: app.location,
+                  job_type: app.job_type,
+                  description: app.description,
+                  studentUniversity: app.studentUniversity || '',
+                  studentMajor: app.studentMajor || '',
+                  studentSkills: app.studentSkills || [],
+                  requirements: app.requirements || [],
+                  cover_letter: app.cover_letter,
+                  portfolio_url: app.portfolio_url,
+                  availability: app.availability,
+                  expected_duration: app.expected_duration,
+                  additional_info: app.additional_info,
+                  statusDate: app.statusDate || app.updated_at || app.applied_date || app.appliedDate,
+                  company: app.company,
+                  position: app.position,
+                  deadline: app.deadline,
+                  interview_date: app.interview_date || null,
+                  interview_time: app.interview_time || null,
+                  interview_method: app.interview_method || null,
+                  interview_location: app.interview_location || null,
+                  interview_notes: app.interview_notes || null,
+                  attendance_confirmed: app.attendance_confirmed || false,
+                  attendance_confirmed_at: app.attendance_confirmed_at || null,
+                  attendance_confirmation_method: app.attendance_confirmation_method || null,
+                }));
+
+                // Apply local overrides to the fresh data
+                const applicationsWithOverrides = freshApplications.map(app => {
+                  const localOverride = localApplicationOverrides[app.id];
+                  if (localOverride) {
+                    return { ...app, ...localOverride };
+                  }
+                  return app;
+                });
+
+                setApplications(applicationsWithOverrides);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching fresh applications after scheduling:', error);
+          }
+        }
       } catch (error) {
         console.error('Error scheduling interview:', error);
         alert('Gagal menjadwalkan wawancara. Silakan coba lagi.');
@@ -472,6 +530,109 @@ const CompanyApplicationsPage = () => {
           } : app
         ));
 
+        // Store local override for this application to ensure it keeps the correct status
+        setLocalApplicationOverrides(prev => ({
+          ...prev,
+          [id]: {
+            status: newStatus,
+            statusDate: new Date().toISOString().split('T')[0],
+            feedback_note: updatedApplication?.feedback_note || ''
+          }
+        }));
+
+        // If accepting the application, we should remove it from scheduled interviews set
+        if (newStatus === 'Accepted') {
+          setInterviewScheduledApplications(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+          });
+        }
+
+        // If rejecting the application, we should remove it from scheduled interviews set
+        if (newStatus === 'Rejected') {
+          setInterviewScheduledApplications(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+          });
+        }
+
+        // Clear the local override after 30 seconds to allow for server updates
+        setTimeout(() => {
+          setLocalApplicationOverrides(prev => {
+            const newOverrides = { ...prev };
+            delete newOverrides[id];
+            return newOverrides;
+          });
+        }, 30000);
+
+        // Fetch fresh data to ensure consistency after accept/reject
+        if (token) {
+          try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/company/applications`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.data) {
+                const freshApplications = result.data.map((app: any) => ({
+                  id: app.id,
+                  job_id: app.job_id,
+                  job_title: app.job_title || app.title,
+                  student_id: app.student_id,
+                  student_name: app.student_name || app.studentName,
+                  student_email: app.student_email || app.studentEmail,
+                  applied_date: app.applied_date || app.appliedDate,
+                  status: app.status || 'Applied',
+                  feedback_note: app.feedback_note,
+                  location: app.location,
+                  job_type: app.job_type,
+                  description: app.description,
+                  studentUniversity: app.studentUniversity || '',
+                  studentMajor: app.studentMajor || '',
+                  studentSkills: app.studentSkills || [],
+                  requirements: app.requirements || [],
+                  cover_letter: app.cover_letter,
+                  portfolio_url: app.portfolio_url,
+                  availability: app.availability,
+                  expected_duration: app.expected_duration,
+                  additional_info: app.additional_info,
+                  statusDate: app.statusDate || app.updated_at || app.applied_date || app.appliedDate,
+                  company: app.company,
+                  position: app.position,
+                  deadline: app.deadline,
+                  interview_date: app.interview_date || null,
+                  interview_time: app.interview_time || null,
+                  interview_method: app.interview_method || null,
+                  interview_location: app.interview_location || null,
+                  interview_notes: app.interview_notes || null,
+                  attendance_confirmed: app.attendance_confirmed || false,
+                  attendance_confirmed_at: app.attendance_confirmed_at || null,
+                  attendance_confirmation_method: app.attendance_confirmation_method || null,
+                }));
+
+                // Apply local overrides to the fresh data
+                const applicationsWithOverrides = freshApplications.map(app => {
+                  const localOverride = localApplicationOverrides[app.id];
+                  if (localOverride) {
+                    return { ...app, ...localOverride };
+                  }
+                  return app;
+                });
+
+                setApplications(applicationsWithOverrides);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching fresh applications after accept/reject:', error);
+          }
+        }
+
         // Close modal if open
         // No need to close modals here since they're handled separately
       } catch (error) {
@@ -502,21 +663,10 @@ const CompanyApplicationsPage = () => {
   // Function to handle schedule change
   const handleScheduleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setInterviewSchedule(prev => {
-      // Ensure previous state has all required properties
-      const safePrev = {
-        date: prev.date || '',
-        time: prev.time || '',
-        method: prev.method || 'online',
-        location: prev.location || '',
-        notes: prev.notes || ''
-      };
-
-      return {
-        ...safePrev,
-        [name]: value
-      };
-    });
+    setInterviewSchedule(prev => ({
+      ...prev,
+      [name]: value || ''  // Ensure value is never undefined
+    }));
   };
 
   return (
@@ -554,9 +704,15 @@ const CompanyApplicationsPage = () => {
               </button>
               <div className="flex items-center space-x-2">
                 <div className={`h-10 w-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center`}>
-                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>C</span>
+                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                    {companyProfile?.name
+                      ? companyProfile.name.charAt(0).toUpperCase()
+                      : user?.email?.charAt(0).toUpperCase() || 'C'}
+                  </span>
                 </div>
-                <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>PT Teknologi Maju</span>
+                <span className={`hidden md:block ${darkMode ? 'text-white' : 'text-gray-700'}`}>
+                  {companyProfile?.name || user?.email?.split('@')[0] || 'Perusahaan'}
+                </span>
               </div>
             </div>
           </div>
@@ -612,18 +768,6 @@ const CompanyApplicationsPage = () => {
                     Baru
                   </button>
                   <button
-                    onClick={() => setStatusFilter('Reviewed')}
-                    className={`px-4 py-2 rounded-lg ${statusFilter === 'Reviewed' ? (darkMode ? 'bg-yellow-600 text-white' : 'bg-yellow-500 text-white') : (darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}`}
-                  >
-                    Direview
-                  </button>
-                  <button
-                    onClick={() => setStatusFilter('Interview')}
-                    className={`px-4 py-2 rounded-lg ${statusFilter === 'Interview' ? (darkMode ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white') : (darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}`}
-                  >
-                    Wawancara
-                  </button>
-                  <button
                     onClick={() => setStatusFilter('Accepted')}
                     className={`px-4 py-2 rounded-lg ${statusFilter === 'Accepted' ? (darkMode ? 'bg-green-600 text-white' : 'bg-green-500 text-white') : (darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}`}
                   >
@@ -672,10 +816,8 @@ const CompanyApplicationsPage = () => {
                   <div
                     key={app.id}
                     className={`rounded-xl p-6 shadow ${darkMode ? 'bg-gray-800' : 'bg-white'} border-l-4 ${
-                      getDisplayStatus(app.status, !!app.interview_date) === 'Applied' ? 'border-blue-500' :
-                      getDisplayStatus(app.status, !!app.interview_date) === 'Reviewed' ? 'border-yellow-500' :
-                      getDisplayStatus(app.status, !!app.interview_date) === 'Interview' ? 'border-purple-500' :
-                      getDisplayStatus(app.status, !!app.interview_date) === 'Accepted' ? 'border-green-500' : 'border-red-500'
+                      getDisplayStatus(app.status) === 'Applied' ? 'border-blue-500' :
+                      getDisplayStatus(app.status) === 'Accepted' ? 'border-green-500' : 'border-red-500'
                     }`}
                   >
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between">
@@ -683,14 +825,9 @@ const CompanyApplicationsPage = () => {
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2">
                           <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{app.title}</h3>
                           <div className="flex items-center gap-2">
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium mt-1 md:mt-0 ${getStatusColor(getDisplayStatus(app.status, !!app.interview_date))}`}>
-                              {getDisplayStatus(app.status, !!app.interview_date)}
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium mt-1 md:mt-0 ${getStatusColor(getDisplayStatus(app.status))}`}>
+                              {getDisplayStatus(app.status)}
                             </span>
-                            {app.attendance_confirmed && (
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${darkMode ? 'bg-green-800 text-green-200' : 'bg-green-200 text-green-800'}`}>
-                                Hadir
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -709,7 +846,7 @@ const CompanyApplicationsPage = () => {
                               ? `${darkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'} border`
                               : app.status === 'Reviewed'
                                 ? `${darkMode ? 'bg-yellow-900/20 border-yellow-800' : 'bg-yellow-50 border-yellow-200'} border`
-                                : app.status === 'Interview'
+                                : getDisplayStatus(app.status) === 'Interview'
                                   ? `${darkMode ? 'bg-purple-900/20 border-purple-800' : 'bg-purple-50 border-purple-200'} border`
                                   : app.status === 'Accepted'
                                     ? `${darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'} border`
@@ -775,30 +912,10 @@ const CompanyApplicationsPage = () => {
                       </div>
 
                       <div className="ml-0 md:ml-4 mt-4 md:mt-0 flex flex-col space-y-2">
-                        <div className="flex flex-wrap gap-2">
-                          {/* Show main action button only when interview is not scheduled or when application has been accepted/rejected */}
-                          {!(app.status === 'Interview' || (!!app.interview_date && app.status !== 'Accepted' && app.status !== 'Rejected')) && (
-                            <button
-                              onClick={() => handleStatusChange(app.id, app.status, false)}
-                              className={`px-4 py-2 rounded-lg text-sm ${
-                                app.status === 'Applied'
-                                  ? `${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white`
-                                  : app.status === 'Reviewed'
-                                    ? `${darkMode ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-yellow-500 hover:bg-yellow-600'} text-white`
-                                    : app.status === 'Accepted'
-                                      ? `${darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'} text-white`
-                                      : app.status === 'Rejected'
-                                        ? `${darkMode ? 'bg-red-600 hover:bg-red-700' : 'bg-red-500 hover:bg-red-600'} text-white`
-                                        : `${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-500 hover:bg-gray-600'} text-white`
-                              }`}
-                            >
-                              {getStatusAction(app.status)}
-                            </button>
-                          )}
-
-                          {/* Show Accept/Reject buttons when status is Interview or when interview is scheduled but NOT yet accepted/rejected */}
-                          {(app.status === 'Interview' || (!!app.interview_date && app.status !== 'Accepted' && app.status !== 'Rejected')) && (
-                            <div className="flex flex-wrap gap-2">
+                                                <div className="flex flex-wrap gap-2 items-center">
+                          {/* Show Accept/Reject buttons only for applications that are not yet accepted or rejected */}
+                          {getDisplayStatus(app.status) !== 'Accepted' && getDisplayStatus(app.status) !== 'Rejected' ? (
+                            <>
                               <button
                                 onClick={() => handleAcceptRejectApplication(app.id, 'accept')}
                                 className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
@@ -811,15 +928,107 @@ const CompanyApplicationsPage = () => {
                               >
                                 Tolak
                               </button>
-                            </div>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleViewProfile(app)}
+                              className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
+                            >
+                              Lihat Detail
+                            </button>
                           )}
 
-                          <button
-                            onClick={() => handleViewProfile(app)}
-                            className={`px-4 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
-                          >
-                            Profil
-                          </button>
+                          {/* Menu tombol untuk aksi tambahan - dirapikan */}
+                          <div className="relative group">
+                            <button
+                              className={`px-3 py-2 rounded-lg text-sm ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'} flex items-center`}
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                              </svg>
+                            </button>
+                            <div className={`absolute right-0 mt-1 w-48 rounded-md shadow-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} ring-1 ring-black ring-opacity-5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10`}>
+                              <div className="py-1">
+                                {app.portfolio_url && (
+                                  <a
+                                    href={app.portfolio_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`block px-4 py-2 text-sm ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                  >
+                                    🔗 Lihat Portfolio
+                                  </a>
+                                )}
+                                {app.cover_letter && (
+                                  <button
+                                    onClick={() => alert(`Cover Letter:\n${app.cover_letter}`)}
+                                    className={`w-full text-left block px-4 py-2 text-sm ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                  >
+                                    📧 Lihat Surat Lamaran
+                                  </button>
+                                )}
+                                {getDisplayStatus(app.status) !== 'Accepted' && getDisplayStatus(app.status) !== 'Rejected' && (
+                                  <button
+                                    onClick={async () => {
+                                      if (app.id) { // Check if application ID exists
+                                        // Open the resume in a new tab using authenticated request
+                                        if (token) {
+                                          try {
+                                            // Create a temporary link with the authenticated request
+                                            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/applications/${app.id}/resume`, {
+                                              headers: {
+                                                'Authorization': `Bearer ${token}`,
+                                              },
+                                            });
+
+                                            if (response.ok) {
+                                              const blob = await response.blob();
+                                              const url = window.URL.createObjectURL(blob);
+                                              window.open(url, '_blank');
+                                              window.URL.revokeObjectURL(url);
+                                            } else {
+                                              // Try to get error message from response
+                                              let errorMsg = 'Gagal membuka dokumen. Silakan coba lagi.';
+                                              try {
+                                                const errorData = await response.json();
+                                                if (errorData.message) {
+                                                  if (errorData.message.includes('not found') || errorData.message.includes('unavailable')) {
+                                                    errorMsg = 'Dokumen tidak tersedia - mungkin sudah dihapus oleh pelamar.';
+                                                  } else {
+                                                    errorMsg = `Gagal membuka dokumen: ${errorData.message}`;
+                                                  }
+                                                }
+                                              } catch (e) {
+                                                // If response is not JSON, use status text
+                                                errorMsg = `Gagal membuka dokumen (${response.status}): ${response.statusText}`;
+                                              }
+                                              alert(errorMsg);
+                                            }
+                                          } catch (error) {
+                                            console.error('Error fetching document:', error);
+                                            alert('Terjadi kesalahan saat mengambil dokumen. Silakan coba lagi.');
+                                          }
+                                        } else {
+                                          alert('Silakan login terlebih dahulu untuk melihat dokumen');
+                                        }
+                                      } else {
+                                        alert('ID aplikasi tidak ditemukan untuk dokumen ini');
+                                      }
+                                    }}
+                                    className={`w-full text-left block px-4 py-2 text-sm ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'} ${(app.id ? '' : 'opacity-50 cursor-not-allowed')}`}
+                                  >
+                                    📄 Lihat Dokumen
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => alert(`Hubungi kandidat:\nEmail: ${app.student_email}\nNama: ${app.student_name}`)}
+                                  className={`w-full text-left block px-4 py-2 text-sm ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'}`}
+                                >
+                                  📞 Contact
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -906,6 +1115,84 @@ const CompanyApplicationsPage = () => {
                         </div>
                       )}
 
+                      {/* Resume Document Info */}
+                      {selectedApplicant.resume_name && (
+                        <div className={`mt-4 p-4 rounded-lg ${darkMode ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
+                          <h4 className={`font-semibold mb-3 ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>Dokumen Lamaran</h4>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                <span className="font-medium">Nama:</span> {selectedApplicant.resume_name}
+                              </p>
+                              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                <span className="font-medium">Jenis:</span> {selectedApplicant.resume_type || 'Dokumen'}
+                              </p>
+                              {selectedApplicant.resume_size && (
+                                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                  <span className="font-medium">Ukuran:</span> {selectedApplicant.resume_size}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={async () => {
+                                if (selectedApplicant.id) {
+                                  // Open the resume in a new tab using authenticated request
+                                  if (token) {
+                                    try {
+                                      // Create a temporary link with the authenticated request
+                                      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/applications/${selectedApplicant.id}/resume`, {
+                                        headers: {
+                                          'Authorization': `Bearer ${token}`,
+                                        },
+                                      });
+
+                                      if (response.ok) {
+                                        const blob = await response.blob();
+                                        const url = window.URL.createObjectURL(blob);
+                                        window.open(url, '_blank');
+                                        window.URL.revokeObjectURL(url);
+                                      } else {
+                                        // Try to get error message from response
+                                        let errorMsg = 'Gagal membuka dokumen. Silakan coba lagi.';
+                                        try {
+                                          const errorData = await response.json();
+                                          if (errorData.message) {
+                                            if (errorData.message.includes('not found') || errorData.message.includes('unavailable')) {
+                                              errorMsg = 'Dokumen tidak tersedia - mungkin sudah dihapus oleh pelamar.';
+                                            } else {
+                                              errorMsg = `Gagal membuka dokumen: ${errorData.message}`;
+                                            }
+                                          }
+                                        } catch (e) {
+                                          // If response is not JSON, use status text
+                                          errorMsg = `Gagal membuka dokumen (${response.status}): ${response.statusText}`;
+                                        }
+                                        alert(errorMsg);
+                                      }
+                                    } catch (error) {
+                                      console.error('Error fetching document:', error);
+                                      alert('Terjadi kesalahan saat mengambil dokumen. Silakan coba lagi.');
+                                    }
+                                  } else {
+                                    alert('Silakan login terlebih dahulu untuk melihat dokumen');
+                                  }
+                                } else {
+                                  alert('ID aplikasi tidak ditemukan untuk dokumen ini');
+                                }
+                              }}
+                              className={`px-3 py-1 rounded text-sm ${darkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
+                            >
+                              Lihat Dokumen
+                            </button>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                              <span className="font-medium">Deskripsi:</span> Dokumen utama yang digunakan dalam aplikasi ini
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <h4 className={`font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Email</h4>
@@ -944,13 +1231,13 @@ const CompanyApplicationsPage = () => {
                 onClick={() => {
                   setShowInterviewScheduleModal(false);
                   setSelectedApplication(null);
-                  setInterviewSchedule({
-                    date: '',
-                    time: '',
-                    method: 'online',
-                    location: '',
-                    notes: ''
-                  });
+                  setInterviewSchedule(prev => ({
+                    date: prev.date || '',
+                    time: prev.time || '',
+                    method: prev.method || 'online',
+                    location: prev.location || '',
+                    notes: prev.notes || ''
+                  }));
                 }}
                 className={`p-2 rounded-full ${darkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-200'}`}
               >
@@ -998,7 +1285,7 @@ const CompanyApplicationsPage = () => {
                           <input
                             type="date"
                             name="date"
-                            value={interviewSchedule.date}
+                            value={interviewSchedule.date || ''}
                             onChange={handleScheduleChange}
                             className={`w-full px-4 py-2 rounded-lg border ${
                               darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
@@ -1012,7 +1299,7 @@ const CompanyApplicationsPage = () => {
                           <input
                             type="time"
                             name="time"
-                            value={interviewSchedule.time}
+                            value={interviewSchedule.time || ''}
                             onChange={handleScheduleChange}
                             className={`w-full px-4 py-2 rounded-lg border ${
                               darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
@@ -1025,7 +1312,7 @@ const CompanyApplicationsPage = () => {
                           <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Metode Wawancara</label>
                           <select
                             name="method"
-                            value={interviewSchedule.method}
+                            value={interviewSchedule.method || 'online'}
                             onChange={handleScheduleChange}
                             className={`w-full px-4 py-2 rounded-lg border ${
                               darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
@@ -1042,7 +1329,7 @@ const CompanyApplicationsPage = () => {
                             <input
                               type="text"
                               name="location"
-                              value={interviewSchedule.location}
+                              value={interviewSchedule.location || ''}
                               onChange={handleScheduleChange}
                               placeholder="Alamat lengkap kantor"
                               className={`w-full px-4 py-2 rounded-lg border ${
@@ -1057,7 +1344,7 @@ const CompanyApplicationsPage = () => {
                         <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Catatan Tambahan</label>
                         <textarea
                           name="notes"
-                          value={interviewSchedule.notes}
+                          value={interviewSchedule.notes || ''}
                           onChange={handleScheduleChange}
                           placeholder="Catatan tambahan untuk pelamar..."
                           rows={3}
@@ -1072,13 +1359,13 @@ const CompanyApplicationsPage = () => {
                           onClick={() => {
                             setShowInterviewScheduleModal(false);
                             setSelectedApplication(null);
-                            setInterviewSchedule({
-                              date: '',
-                              time: '',
-                              method: 'online',
-                              location: '',
-                              notes: ''
-                            });
+                            setInterviewSchedule(prev => ({
+                              date: prev.date || '',
+                              time: prev.time || '',
+                              method: prev.method || 'online',
+                              location: prev.location || '',
+                              notes: prev.notes || ''
+                            }));
                           }}
                           className={`px-4 py-2 rounded-lg font-medium ${
                             darkMode ? 'bg-gray-600 hover:bg-gray-700 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'

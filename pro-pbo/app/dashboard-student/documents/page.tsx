@@ -3,17 +3,20 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/authContext';
 import { getStudentProfile } from '../../lib/apiService';
+import { getStudentDocuments, uploadStudentDocument, deleteStudentDocument } from '../../services/internshipService';
 import Sidebar from '../../components/Sidebar';
 
 type DocumentType = 'Resume' | 'Cover Letter' | 'Transcript' | 'Certificate' | 'Portfolio' | 'Other';
 type Document = {
-  id: number;
+  id: string; // Changed to string to match backend API
   name: string;
   type: DocumentType;
   size: string;
   uploadDate: string;
   description?: string;
   downloadUrl?: string;
+  fileUrl?: string;
+  fileType?: string;
 };
 
 const DocumentsPage = () => {
@@ -23,8 +26,13 @@ const DocumentsPage = () => {
   const [filter, setFilter] = useState<DocumentType | 'All'>('All');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [documentType, setDocumentType] = useState<DocumentType>('Resume');
+  const [documentTitle, setDocumentTitle] = useState('');
+  const [documentType, setDocumentType] = useState<'resume' | 'cover_letter' | 'transcript' | 'certificate' | 'portfolio' | 'other'>('resume');
   const [documentDescription, setDocumentDescription] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const { token } = useAuth(); // Get the authentication token
 
   useEffect(() => {
     // Check system preference for dark mode
@@ -62,52 +70,46 @@ const DocumentsPage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Initialize with mock document data
+  // Fetch documents from API
   useEffect(() => {
-    const mockDocuments: Document[] = [
-      {
-        id: 1,
-        name: 'Curriculum Vitae.pdf',
-        type: 'Resume',
-        size: '2.4 MB',
-        uploadDate: '2024-10-15',
-        description: 'Resume terbaru untuk aplikasi magang',
-      },
-      {
-        id: 2,
-        name: 'Surat_Pendukung.pdf',
-        type: 'Cover Letter',
-        size: '1.2 MB',
-        uploadDate: '2024-10-16',
-        description: 'Surat lamaran untuk PT Teknologi Maju',
-      },
-      {
-        id: 3,
-        name: 'Transkrip_nilai.pdf',
-        type: 'Transcript',
-        size: '3.1 MB',
-        uploadDate: '2024-10-10',
-        description: 'Transkrip nilai semester 1-6',
-      },
-      {
-        id: 4,
-        name: 'Sertifikat_React.pdf',
-        type: 'Certificate',
-        size: '1.8 MB',
-        uploadDate: '2024-10-18',
-        description: 'Sertifikat React Fundamental',
-      },
-      {
-        id: 5,
-        name: 'Portfolio_2024.pdf',
-        type: 'Portfolio',
-        size: '5.7 MB',
-        uploadDate: '2024-10-20',
-        description: 'Portfolio terbaru 2024',
+    const fetchDocuments = async () => {
+      // Only proceed if we have a valid token
+      if (!token || token.trim() === '') {
+        console.warn('No authentication token available, skipping fetch');
+        setLoading(false);
+        return;
       }
-    ];
-    setDocuments(mockDocuments);
-  }, []);
+
+      try {
+        setLoading(true);
+        setError(null);
+        const fetchedDocuments = await getStudentDocuments(token);
+        setDocuments(fetchedDocuments);
+      } catch (err: any) {
+        // Safe error logging
+        if (err && typeof err === 'object' && err.message) {
+          console.error('Error fetching documents:', err.message);
+        } else {
+          console.error('Error fetching documents:', String(err || 'Unknown error'));
+        }
+
+        // Provide user-friendly error message
+        let errorMessage = 'Gagal memuat dokumen. Silakan coba lagi nanti.';
+        if (err && typeof err === 'object' && err.message && typeof err.message === 'string') {
+          if (err.message.includes('Unauthenticated')) {
+            errorMessage = 'Sesi Anda telah habis. Silakan login kembali.';
+          } else if (err.message.includes('500')) {
+            errorMessage = 'Kesalahan server saat memuat dokumen. Silakan coba lagi nanti.';
+          }
+        }
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDocuments();
+  }, [token]); // Dependency on token so it re-fetches when token changes
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,44 +119,151 @@ const DocumentsPage = () => {
   };
 
   // Handle document upload
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!selectedFile) {
       alert('Silakan pilih file terlebih dahulu');
       return;
     }
 
-    const newDocument: Document = {
-      id: documents.length + 1,
-      name: selectedFile.name,
-      type: documentType,
-      size: `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`,
-      uploadDate: new Date().toISOString().split('T')[0],
-      description: documentDescription
-    };
+    if (!token) {
+      alert('Silakan login terlebih dahulu');
+      return;
+    }
 
-    setDocuments([newDocument, ...documents]);
-    setUploadModalOpen(false);
-    setSelectedFile(null);
-    setDocumentDescription('');
-    alert('Dokumen berhasil diunggah!');
+    try {
+      // Create FormData object to upload file
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      // Use documentTitle if available, otherwise use the file name. If description is provided, append it to the title.
+      let finalTitle = documentTitle || selectedFile.name;
+      if (documentDescription && documentDescription.trim() !== '') {
+        finalTitle = finalTitle + (documentTitle ? ': ' : ' - ') + documentDescription;
+      }
+      formData.append('title', finalTitle);
+      formData.append('type', documentType);
+
+      // Call the upload API
+      const uploadedDocument = await uploadStudentDocument(token, formData);
+
+      // Add the new document to the list
+      setDocuments([uploadedDocument, ...documents]);
+      setUploadModalOpen(false);
+      setSelectedFile(null);
+      setDocumentTitle('');
+      setDocumentDescription('');
+      alert('Dokumen berhasil diunggah!');
+    } catch (error: any) {
+      // Safe error logging to avoid potential console errors
+      if (error && typeof error === 'object' && error.message) {
+        console.error('Error uploading document:', error.message);
+      } else {
+        console.error('Error uploading document:', String(error || 'Unknown error'));
+      }
+
+      // Provide user-friendly error message
+      let errorMessage = 'Gagal mengunggah dokumen. Silakan coba lagi.';
+      if (error && typeof error === 'object' && error.message && typeof error.message === 'string') {
+        if (error.message.includes('Unauthenticated')) {
+          errorMessage = 'Sesi Anda telah habis. Silakan login kembali.';
+        } else if (error.message.includes('413')) {
+          errorMessage = 'Ukuran file terlalu besar. Silakan pilih file dengan ukuran maksimal 10MB.';
+        } else if (error.message.includes('422')) {
+          errorMessage = 'Format file tidak valid. Silakan unggah file PDF, JPG, JPEG, PNG, DOC, atau DOCX.';
+        } else if (error.message.includes('500')) {
+          errorMessage = 'Kesalahan server saat mengunggah dokumen. Silakan coba lagi nanti.';
+        }
+      }
+      alert(errorMessage);
+    }
+  };
+
+  // Handle document deletion
+  const handleDelete = async (docId: string) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus dokumen ini?')) {
+      return;
+    }
+
+    if (!token) {
+      alert('Silakan login terlebih dahulu');
+      return;
+    }
+
+    try {
+      // Call the delete API
+      await deleteStudentDocument(token, docId);
+
+      // Remove the deleted document from the list
+      setDocuments(documents.filter(doc => doc.id !== docId));
+      alert('Dokumen berhasil dihapus!');
+    } catch (error: any) {
+      // Safe error logging to avoid potential console errors
+      if (error && typeof error === 'object' && error.message) {
+        console.error('Error deleting document:', error.message);
+      } else {
+        console.error('Error deleting document:', String(error || 'Unknown error'));
+      }
+
+      // Provide user-friendly error message
+      let errorMessage = 'Gagal menghapus dokumen. Silakan coba lagi.';
+      if (error && typeof error === 'object' && error.message && typeof error.message === 'string') {
+        if (error.message.includes('Unauthenticated')) {
+          errorMessage = 'Sesi Anda telah habis. Silakan login kembali.';
+        } else if (error.message.includes('404')) {
+          errorMessage = 'Dokumen tidak ditemukan. Mungkin sudah dihapus sebelumnya.';
+        } else if (error.message.includes('500')) {
+          errorMessage = 'Kesalahan server saat menghapus dokumen. Silakan coba lagi nanti.';
+        }
+      }
+      alert(errorMessage);
+    }
+  };
+
+  // Function to convert backend document type to frontend display type
+  const convertBackendTypeToFrontend = (backendType: string): DocumentType => {
+    if (!backendType) return 'Other';
+
+    const typeUpper = backendType.toUpperCase();
+    if (typeUpper.includes('RESUME') || typeUpper.includes('CV')) {
+      return 'Resume';
+    } else if (typeUpper.includes('COVER') && typeUpper.includes('LETTER')) {
+      return 'Cover Letter';
+    } else if (typeUpper.includes('TRANSCRIPT')) {
+      return 'Transcript';
+    } else if (typeUpper.includes('CERTIFIC')) {
+      return 'Certificate';
+    } else if (typeUpper.includes('PORTFOLIO') || typeUpper.includes('IMAGE') || typeUpper.includes('PHOTO')) {
+      return 'Portfolio';
+    } else {
+      return 'Other';
+    }
   };
 
   // Filter documents based on selected filter
-  const filteredDocuments = filter === 'All' 
-    ? documents 
-    : documents.filter(doc => doc.type === filter);
+  const filteredDocuments = filter === 'All'
+    ? documents
+    : documents.filter(doc => {
+        const frontendType = convertBackendTypeToFrontend(doc.type);
+        return frontendType === filter;
+      });
 
 
   // Get icon based on document type
   const getDocumentIcon = (type: DocumentType) => {
-    switch(type) {
-      case 'Resume': return '📄';
-      case 'Cover Letter': return '✉️';
-      case 'Transcript': return '🎓';
-      case 'Certificate': return '🏆';
-      case 'Portfolio': return '🖼️';
-      case 'Other': return '📋';
-      default: return '📄';
+    // Convert the type to uppercase for comparison
+    const typeUpper = (type || '').toUpperCase();
+
+    if (typeUpper.includes('RESUME') || typeUpper.includes('CV')) {
+      return '📄';
+    } else if (typeUpper.includes('COVER') || typeUpper.includes('LETTER')) {
+      return '✉️';
+    } else if (typeUpper.includes('TRANSCRIPT')) {
+      return '🎓';
+    } else if (typeUpper.includes('CERTIFIC')) {
+      return '🏆';
+    } else if (typeUpper.includes('PORTFOLIO') || typeUpper.includes('IMAGE') || typeUpper.includes('PHOTO')) {
+      return '🖼️';
+    } else {
+      return '📋';
     }
   };
 
@@ -167,8 +276,6 @@ const DocumentsPage = () => {
   const [userName, setUserName] = useState<string>('User');
   const [userEmail, setUserEmail] = useState<string>('user@example.com');
   const [userInitial, setUserInitial] = useState<string>('U');
-
-  const { token } = useAuth();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -244,14 +351,14 @@ const DocumentsPage = () => {
         )}
 
         {/* Mobile sidebar overlay */}
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
           <div
             className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
             onClick={() => setSidebarOpen(false)}
           ></div>
         )}
 
-        {sidebarOpen && window.innerWidth < 768 && (
+        {sidebarOpen && typeof window !== 'undefined' && window.innerWidth < 768 && (
           <div className="fixed top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] md:hidden">
             <Sidebar darkMode={darkMode} userProfile={{ name: userName, email: userEmail }} />
           </div>
@@ -347,13 +454,141 @@ const DocumentsPage = () => {
                       </div>
                       
                       <div className="flex space-x-2">
-                        <button className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <button
+                          onClick={async () => {
+                            if (doc.id) {
+                              if (token) {
+                                try {
+                                  // Create a temporary link with the authenticated request
+                                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/documents/${doc.id}/serve`, {
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                    },
+                                  });
+
+                                  if (response.ok) {
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    window.open(url, '_blank');
+                                    window.URL.revokeObjectURL(url);
+                                  } else {
+                                    // Try to get error message from response
+                                    let errorMsg = 'Gagal membuka dokumen. Silakan coba lagi.';
+                                    try {
+                                      const errorData = await response.json();
+                                      if (errorData.message) {
+                                        errorMsg = `Gagal membuka dokumen: ${errorData.message}`;
+                                      }
+                                    } catch (e) {
+                                      // If response is not JSON, use status text
+                                      errorMsg = `Gagal membuka dokumen (${response.status}): ${response.statusText}`;
+                                    }
+                                    alert(errorMsg);
+                                  }
+                                } catch (error: any) {
+                                  // Safe error logging
+                                  if (error && typeof error === 'object' && error.message) {
+                                    console.error('Error fetching document:', error.message);
+                                  } else {
+                                    console.error('Error fetching document:', String(error || 'Unknown error'));
+                                  }
+
+                                  let errorMessage = 'Terjadi kesalahan saat mengambil dokumen. Silakan coba lagi.';
+                                  if (error && typeof error === 'object' && error.message && typeof error.message === 'string') {
+                                    if (error.message.includes('Unauthenticated')) {
+                                      errorMessage = 'Sesi Anda telah habis. Silakan login kembali.';
+                                    } else if (error.message.includes('404')) {
+                                      errorMessage = 'Dokumen tidak ditemukan. Mungkin sudah dihapus.';
+                                    } else if (error.message.includes('500')) {
+                                      errorMessage = 'Kesalahan server saat mengambil dokumen. Silakan coba lagi nanti.';
+                                    }
+                                  }
+                                  alert(errorMessage);
+                                }
+                              } else {
+                                alert('Silakan login terlebih dahulu untuk melihat dokumen');
+                              }
+                            } else {
+                              alert('ID dokumen tidak ditemukan');
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                        >
                           Lihat
                         </button>
-                        <button className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <button
+                          onClick={async () => {
+                            if (doc.id) {
+                              if (token) {
+                                try {
+                                  // Create a temporary link with the authenticated request
+                                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/documents/${doc.id}/serve`, {
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`,
+                                    },
+                                  });
+
+                                  if (response.ok) {
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+
+                                    // Create a temporary link and trigger download
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = doc.name || 'document';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    window.URL.revokeObjectURL(url);
+                                  } else {
+                                    // Try to get error message from response
+                                    let errorMsg = 'Gagal mengunduh dokumen. Silakan coba lagi.';
+                                    try {
+                                      const errorData = await response.json();
+                                      if (errorData.message) {
+                                        errorMsg = `Gagal mengunduh dokumen: ${errorData.message}`;
+                                      }
+                                    } catch (e) {
+                                      // If response is not JSON, use status text
+                                      errorMsg = `Gagal mengunduh dokumen (${response.status}): ${response.statusText}`;
+                                    }
+                                    alert(errorMsg);
+                                  }
+                                } catch (error: any) {
+                                  // Safe error logging
+                                  if (error && typeof error === 'object' && error.message) {
+                                    console.error('Error downloading document:', error.message);
+                                  } else {
+                                    console.error('Error downloading document:', String(error || 'Unknown error'));
+                                  }
+
+                                  let errorMessage = 'Terjadi kesalahan saat mengunduh dokumen. Silakan coba lagi.';
+                                  if (error && typeof error === 'object' && error.message && typeof error.message === 'string') {
+                                    if (error.message.includes('Unauthenticated')) {
+                                      errorMessage = 'Sesi Anda telah habis. Silakan login kembali.';
+                                    } else if (error.message.includes('404')) {
+                                      errorMessage = 'Dokumen tidak ditemukan. Mungkin sudah dihapus.';
+                                    } else if (error.message.includes('500')) {
+                                      errorMessage = 'Kesalahan server saat mengunduh dokumen. Silakan coba lagi nanti.';
+                                    }
+                                  }
+                                  alert(errorMessage);
+                                }
+                              } else {
+                                alert('Silakan login terlebih dahulu untuk mengunduh dokumen');
+                              }
+                            } else {
+                              alert('ID dokumen tidak ditemukan');
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                        >
                           Unduh
                         </button>
-                        <button className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-red-700 hover:bg-red-600' : 'bg-red-500 hover:bg-red-600'} text-white`}>
+                        <button
+                          onClick={() => handleDelete(doc.id)}
+                          className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-red-700 hover:bg-red-600' : 'bg-red-500 hover:bg-red-600'} text-white`}
+                        >
                           Hapus
                         </button>
                       </div>
@@ -395,15 +630,15 @@ const DocumentsPage = () => {
                 <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Jenis Dokumen</label>
                 <select
                   value={documentType}
-                  onChange={(e) => setDocumentType(e.target.value as DocumentType)}
+                  onChange={(e) => setDocumentType(e.target.value as 'resume' | 'cover_letter' | 'transcript' | 'certificate' | 'portfolio' | 'other')}
                   className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 >
-                  <option value="Resume">Resume</option>
-                  <option value="Cover Letter">Surat Lamaran</option>
-                  <option value="Transcript">Transkrip Nilai</option>
-                  <option value="Certificate">Sertifikat</option>
-                  <option value="Portfolio">Portofolio</option>
-                  <option value="Other">Lainnya</option>
+                  <option value="resume">Resume</option>
+                  <option value="cover_letter">Surat Lamaran</option>
+                  <option value="transcript">Transkrip Nilai</option>
+                  <option value="certificate">Sertifikat</option>
+                  <option value="portfolio">Portofolio</option>
+                  <option value="other">Lainnya</option>
                 </select>
               </div>
 
